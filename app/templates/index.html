@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block content %}
+
+  <h2>Teilnehmer</h2>
+  <form method="POST" action="{{ url_for('main.update_times_bulk') }}" class="update-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="button" onclick="resetSorting()" class="btn btn-primary">Sortierung zurücksetzen</button>
+    <table class="table table-striped table-sm" id="participantsTable">
+      <thead>
+        <tr>
+          <th>Aktiv</th>
+          <th onclick="sortTable(1, true)">Nr.</th>
+          <th onclick="sortTable(2)">Vorname</th>
+          <th onclick="sortTable(3)">Name</th>
+          <th class="col-time">VR 1</th>
+          <th class="col-qual">Q</th>
+          <th class="col-time">VR 2</th>
+          <th class="col-qual">Q</th>
+          <th class="col-time">VR 3</th>
+          <th class="col-qual">Q</th>
+          <th class="col-time">Top VR</th>
+          <th class="col-time">ZR 1</th>
+          <th class="col-time">ZR 2</th>
+          <th class="col-time">Top ZR</th>
+          <th class="col-qual">Q</th>
+          <th class="col-time">Final</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for participant in participants %}
+          <tr class="{% if participant.active %}table-success{% endif %}">
+            <td>
+              <form method="POST" action="{{ url_for('main.set_active', id=participant.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-secondary btn-sm">
+                  <i class="fas fa-play-circle"></i>
+                </button>
+              </form>
+            </td>
+            <td>{{ participant.start_nr }}</td>
+            <td>{{ participant.first_name }}</td>
+            <td>{{ participant.last_name }}</td>
+            <td>
+              <input type="text" name="time1_{{ participant.id }}" value="{{ participant.time1 or '' }}" class="form-control form-control-sm" onkeydown="submitAndFocusNext(event, this)">
+            </td>
+
+            <td>
+              {% if participant.round1_qualified %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="far fa-circle"></i>{% endif %}
+            </td>
+            <td>
+              <input type="text" name="time2_{{ participant.id }}" value="{{ participant.time2 or '' }}" class="form-control form-control-sm" onkeydown="submitAndFocusNext(event, this)" {% if  participant.round1_qualified %}disabled{% endif %}>
+            </td>
+
+            <td>
+              {% if participant.round2_qualified %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="far fa-circle"></i>{% endif %}
+            </td>
+            <td>
+              <input type="text" name="time3_{{ participant.id }}" value="{{ participant.time3 or '' }}" class="form-control form-control-sm" onkeydown="submitAndFocusNext(event, this)" {% if participant.round2_qualified %}disabled{% endif %}>
+            </td>
+
+            <td>{% if participant.round3_qualified %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="far fa-circle"></i>{% endif %}
+            </td>
+            <td>{{ participant.toptime_Vorrunde }}</td>
+            <td>
+              <input type="text" name="time4_{{ participant.id }}" value="{{ participant.time4 or '' }}" class="form-control form-control-sm" onkeydown="submitAndFocusNext(event, this)" {% if not participant.round3_qualified %}disabled{% endif %}>
+            </td>
+            <td>
+              <input type="text" name="time5_{{ participant.id }}" value="{{ participant.time5 or '' }}" class="form-control form-control-sm" onkeydown="submitAndFocusNext(event, this)" {% if not participant.round3_qualified %}disabled{% endif %}>
+            </td>
+            <td>{{ participant.toptime_Zwischenrunde }}</td>
+            <td>{% if participant.zwischenrunde_qualified %}<i class="fas fa-check-circle text-success"></i>{% else %}<i class="far fa-circle"></i>{% endif %}
+            </td>
+            <td>
+              <input type="text" name="time6_{{ participant.id }}" value="{{ participant.time6 or '' }}" class="form-control form-control-sm" onkeydown="submitAndFocusNext(event, this)" {% if not participant.zwischenrunde_qualified %}disabled{% endif %}>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="4"></td>
+          <td colspan="1">
+            <form method="POST" action="{{ url_for('main.finish_round', round='VR1') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary btn-block">Abschliessend VR1</button>
+            </form>
+          </td>
+          <td></td>
+          <td colspan="1">
+            <form method="POST" action="{{ url_for('main.finish_round', round='VR2') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary btn-block">Abschliessend VR2</button>
+            </form>
+          </td>
+          <td></td>
+
+          <td colspan="1">
+            <form method="POST" action="{{ url_for('main.finish_round', round='VR3') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary btn-block">Abschliessend VR3</button>
+            </form>
+          </td>
+          <td></td>
+          <td></td>
+          <td colspan="2">
+            <form method="POST" action="{{ url_for('main.finish_round', round='ZR') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary btn-block">Abschliessend ZR</button>
+            </form>
+          </td>
+          <td></td>
+          <td></td>
+
+          <td colspan="3">
+            <form method="POST" action="{{ url_for('main.finish_round', round='FINAL') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary btn-block">Abschliessend FINAL</button>
+            </form>
+          </td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    <button type="button" onclick="resetSorting()" class="btn btn-primary">Sortierung zurücksetzen</button>
+  </form>
+
+  <style>
+    .col-time {
+      width: 100px;
+    }
+    .col-qual {
+      width: 50px;
+    }
+  </style>
+
+  <script>
+    // Function to submit and focus the next field in the column
+    function submitAndFocusNext(event, currentField) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+
+        let form = currentField.closest("form");
+        let inputs = Array.from(document.querySelectorAll('input[type="text"]'));
+        let currentIndex = inputs.indexOf(currentField);
+
+        // Get the current field position
+        let currentColumnIndex = Array.from(currentField.closest('tr').children).indexOf(currentField.closest('td'));
+        let nextRowField = null;
+
+        // Find the next field in the same column
+        for (let i = currentIndex + 1; i < inputs.length; i++) {
+          let field = inputs[i];
+          let fieldColumnIndex = Array.from(field.closest('tr').children).indexOf(field.closest('td'));
+          if (fieldColumnIndex === currentColumnIndex) {
+            nextRowField = field;
+            break;
+          }
+        }
+
+        // Append hidden input to identify this submit action
+        let hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'update_times';
+        hiddenInput.value = 'true';
+        form.appendChild(hiddenInput);
+
+        // Submit the form
+        let formData = new FormData(form);
+        fetch(form.action, {
+          method: "POST",
+          body: formData,
+        }).then(response => {
+          if (response.ok) {
+            if (nextRowField) {
+              nextRowField.focus();
+            }
+          } else {
+            console.error('Form submission failed');
+          }
+        }).catch(error => {
+          console.error('Form submission error:', error);
+        });
+      }
+    }
+
+    // Function to sort the table
+    function sortTable(n, isNumeric = false) {
+      const table = document.getElementById("participantsTable");
+      let rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+      switching = true;
+      dir = "asc"; 
+      while (switching) {
+        switching = false;
+        rows = table.rows;
+        for (i = 1; i < (rows.length - 1); i++) {
+          shouldSwitch = false;
+          x = rows[i].getElementsByTagName("TD")[n];
+          y = rows[i + 1].getElementsByTagName("TD")[n];
+          let xValue = isNumeric ? parseInt(x.innerHTML) : x.innerHTML.toLowerCase();
+          let yValue = isNumeric ? parseInt(y.innerHTML) : y.innerHTML.toLowerCase();
+          if (dir == "asc") {
+            if (xValue > yValue) {
+              shouldSwitch = true;
+              break;
+            }
+          } else if (dir == "desc") {
+            if (xValue < yValue) {
+              shouldSwitch = true;
+              break;
+            }
+          }
+        }
+        if (shouldSwitch) {
+          rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+          switching = true;
+          switchcount++; 
+        } else {
+          if (switchcount == 0 && dir == "asc") {
+            dir = "desc";
+            switching = true;
+          }
+        }
+      }
+    }
+
+    // Function to reset the sorting
+    function resetSorting() {
+      window.location.reload();
+    }
+  </script>
+
+{% endblock %}

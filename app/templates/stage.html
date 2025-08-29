@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stage</title>
+    <meta name="color-scheme" content="dark light">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      html, body { background:#000; color:#fff; height:100%; }
+      .stage { min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+      .name { font-size: 3.2rem; font-weight: 700; }
+      .meta { font-size: 1.5rem; color:#ccc; }
+      .photo { max-height: 55vh; max-width: 90vw; object-fit: cover; border-radius: 12px; box-shadow: 0 0 20px rgba(0,0,0,.5); }
+      .times { font-size:1.4rem; }
+    </style>
+    <script>
+      // Auto-refresh every 15 seconds
+      setTimeout(function(){ window.location.reload(); }, 15000);
+    </script>
+  </head>
+  <body>
+    <div class="stage container text-center py-3">
+      {% if participant %}
+        {% if participant.photo %}
+          <div class="mb-4">
+            <img class="photo" src="{{ url_for('static', filename=participant.photo) }}" alt="Foto von {{ participant.first_name }} {{ participant.last_name }}">
+          </div>
+        {% endif %}
+        <div class="name mb-2">{{ participant.first_name }} {{ participant.last_name }}</div>
+        <div class="meta mb-4">Start Nr. {{ participant.start_nr or '-' }}{% if participant.city %} • {{ participant.city }}{% endif %}</div>
+        <div class="row justify-content-center">
+          <div class="col-auto">
+            <table class="table table-dark table-striped table-bordered times">
+              <tbody>
+                <tr><th>VR1</th><td>{{ participant.time1 or '–' }}</td></tr>
+                <tr><th>VR2</th><td>{{ participant.time2 or '–' }}</td></tr>
+                <tr><th>VR3</th><td>{{ participant.time3 or '–' }}</td></tr>
+                <tr><th>Top VR</th><td>{{ participant.toptime_Vorrunde or '–' }}</td></tr>
+                <tr><th>ZR1</th><td>{{ participant.time4 or '–' }}</td></tr>
+                <tr><th>ZR2</th><td>{{ participant.time5 or '–' }}</td></tr>
+                <tr><th>Top ZR</th><td>{{ participant.toptime_Zwischenrunde or '–' }}</td></tr>
+                <tr><th>Final</th><td>{{ participant.time6 or '–' }}</td></tr>
+                <tr><th>Top Final</th><td>{{ participant.toptime_Finalrunde or '–' }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% else %}
+        <div class="name">Kein aktiver Teilnehmer</div>
+      {% endif %}
+    </div>
+  </body>
+  </html>
+

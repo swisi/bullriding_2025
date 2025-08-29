@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2>Aktuelle Rangliste</h2>
+    <table class="table table-striped table-sm">
+      <thead>
+        <tr>
+          <th>Start Nr.</th>
+          <th>Vorname</th>
+          <th>Name</th>
+          <th>Zeit 1</th>
+          <th>Zeit 2</th>
+          <th>Zeit 3</th>
+          <th>Zeit 4</th>
+          <th>Zeit 5</th>
+          <th>Zeit 6</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ranking in rankings %}
+          <tr>
+            <td>{{ ranking.start_nr }}</td>
+            <td>{{ ranking.first_name }}</td>
+            <td>{{ ranking.last_name }}</td>
+            <td>{{ ranking.time1 | default('') }}</td>
+            <td>{{ ranking.time2 | default('') }}</td>
+            <td>{{ ranking.time3 | default('') }}</td>
+            <td>{{ ranking.time4 | default('') }}</td>
+            <td>{{ ranking.time5 | default('') }}</td>
+            <td>{{ ranking.time6 | default('') }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+{% endblock %}

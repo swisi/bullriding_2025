@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="row">
+    <div class="col-md-8 offset-md-2">
+      <h2>Add Participant</h2>
+      <form method="POST" action="" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+
+        <div class="container mt-4">
+          <h4>Address and Contact Information</h4>
+          <table class="table">
+            <tbody>
+              <tr>
+                <td>{{ form.start_nr.label }}</td>
+                <td colspan="3">{{ form.start_nr(class="form-control") }}</td>
+              </tr>
+              <tr>
+                <td>{{ form.first_name.label }}</td>
+                <td>{{ form.first_name(class="form-control") }}</td>
+                <td>{{ form.last_name.label }}</td>
+                <td>{{ form.last_name(class="form-control") }}</td>
+              </tr>
+              <tr>
+                <td>{{ form.address.label }}</td>
+                <td colspan="3">{{ form.address(class="form-control") }}</td>
+              </tr>
+              <tr>
+                <td>{{ form.postal_code.label }}</td>
+                <td>{{ form.postal_code(class="form-control") }}</td>
+                <td>{{ form.city.label }}</td>
+                <td>{{ form.city(class="form-control") }}</td>
+              </tr>
+              <tr>
+                <td>{{ form.email.label }}</td>
+                <td>{{ form.email(class="form-control") }}</td>
+                <td>{{ form.phone.label }}</td>
+                <td>{{ form.phone(class="form-control") }}</td>
+              </tr>
+              <tr>
+                <td>{{ form.photo.label }}</td>
+                <td colspan="3">{{ form.photo(class="form-control-file") }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="form-group mt-4">
+          {{ form.submit(class="btn btn-primary") }}
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
