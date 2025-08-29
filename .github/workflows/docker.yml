@@ -1,10 +1,21 @@
-name: docker-image
+name: docker-image-manual
 
 on:
-  push:
-    branches: [ "main" ]
-    tags: [ "v*.*.*" ]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (e.g. v1.0.0, test-123)"
+        required: true
+        default: "manual"
+      platforms:
+        description: "Target platforms (CSV)"
+        required: false
+        default: "linux/amd64,linux/arm64"
+      latest:
+        description: "Also push :latest tag"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -40,9 +51,17 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch,branch=main
-            type=sha,format=short
-            type=semver,pattern={{version}}
+            type=raw,value=${{ inputs.tag }}
+
+      - name: Compute tag list
+        id: tags
+        shell: bash
+        run: |
+          tags="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.tag }}"
+          if [ "${{ inputs.latest }}" = "true" ]; then
+            tags="$tags,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          fi
+          echo "TAGS=$tags" >> $GITHUB_ENV
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -50,8 +69,8 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: ${{ inputs.platforms }}
+          tags: ${{ env.TAGS }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -73,4 +92,3 @@ jobs:
       #     tags: ${{ secrets.DOCKERHUB_USERNAME }}/bullriding_2025:latest
       #     cache-from: type=gha
       #     cache-to: type=gha,mode=max
-
