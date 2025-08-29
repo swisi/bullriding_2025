@@ -10,10 +10,14 @@ services:
       - FLASK_ENV=production
       - SECRET_KEY=please-change-me
       - DATABASE_URL=sqlite:////app/database/site.db
+      - SITE_NAME=SM Mechnical Bullriding 2025
+      - ALLOW_REGISTRATION=false
+      - MAX_CONTENT_LENGTH=16MB
+      - FLASK_RUN_PORT=5025
     volumes:
       - db-data:/app/database
     entrypoint: ["sh", "/app/entrypoint.sh"]
-    command: ["gunicorn", "-w", "2", "-k", "gthread", "-t", "120", "-b", "0.0.0.0:5000", "wsgi:app"]
+    command: ["gunicorn", "-w", "2", "-k", "gthread", "-t", "120", "-b", "0.0.0.0:5025", "wsgi:app"]
     restart: always
 
 volumes:
