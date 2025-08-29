@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from flask import Flask
+from flask import redirect, url_for, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
@@ -60,5 +61,10 @@ def create_app(config_class=Config):
     @app.context_processor
     def inject_flags():
         return {"allow_registration": app.config.get("ALLOW_REGISTRATION", False)}
+
+    # Nice 404 page for unknown paths
+    @app.errorhandler(404)
+    def not_found(_e):
+        return render_template('404.html', title='Seite nicht gefunden'), 404
 
     return app

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex flex-column align-items-center text-center" style="padding: 6rem 0;">
+  <div class="mb-4" aria-hidden="true" style="font-size:4rem; line-height:1;">🐂💥</div>
+  <h1 class="display-4">404 – Seite nicht gefunden</h1>
+  <p class="lead text-muted mt-3" style="max-width: 40rem;">
+    Uups, diese Route gibt es nicht (mehr). Vielleicht hast du dich vertippt
+    – oder der Bulle hat die Seite abgeworfen.
+  </p>
+  <div class="mt-4">
+    <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+      Zur Startseite
+    </a>
+    <a href="{{ url_for('main.ranking') }}" class="btn btn-outline-secondary ml-2">
+      Rangliste ansehen
+    </a>
+  </div>
+  <small class="text-muted mt-4">Fehlercode: 404</small>
+</div>
+{% endblock %}
+

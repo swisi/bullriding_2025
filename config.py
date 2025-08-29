@@ -1,4 +1,5 @@
 import os
+import re
 
 
 def _normalize_sqlite_uri(uri: str) -> str:
@@ -42,6 +43,53 @@ class Config:
     SITE_NAME = os.getenv("SITE_NAME", "Mechanical Bullriding")
     # Uploads
     UPLOAD_FOLDER = os.path.join(basedir, "app", "static", "uploads")
-    MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))  # 16MB default
+    # Helper: parse byte sizes like "16MB", "10 MiB", or raw bytes
+    def _parse_size_bytes(value, default): # type: ignore
+        if value is None:
+            return default
+        # If already numeric
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return int(value)
+        s = str(value).strip().lower()
+        if not s:
+            return default
+        # Plain integer string
+        if s.isdigit():
+            return int(s)
+        # Match formats like 16mb, 16 mib, 1.5g, 500k, 20 bytes
+        m = re.match(r"^(\d+(?:\.\d+)?)\s*([kmgt]?i?b?|bytes?)$", s)
+        if not m:
+            # Try without trailing 'b' if user wrote just '16m'
+            m = re.match(r"^(\d+(?:\.\d+)?)\s*([kmgt])$", s)
+        if not m:
+            return default
+        num = float(m.group(1))
+        unit = m.group(2)
+        unit = unit.lower()
+        units = {
+            "b": 1,
+            "byte": 1,
+            "bytes": 1,
+            "k": 1024,
+            "kb": 1024,
+            "kib": 1024,
+            "m": 1024 ** 2,
+            "mb": 1024 ** 2,
+            "mib": 1024 ** 2,
+            "g": 1024 ** 3,
+            "gb": 1024 ** 3,
+            "gib": 1024 ** 3,
+            "t": 1024 ** 4,
+            "tb": 1024 ** 4,
+            "tib": 1024 ** 4,
+        }
+        multiplier = units.get(unit, None)
+        if multiplier is None:
+            return default
+        return int(num * multiplier)
+
+    MAX_CONTENT_LENGTH = _parse_size_bytes(
+        os.getenv("MAX_CONTENT_LENGTH"), 16 * 1024 * 1024 # type: ignore
+    )  # 16MB default
     # Feature flags
     ALLOW_REGISTRATION = os.getenv("ALLOW_REGISTRATION", "false").lower() in ("1", "true", "yes")

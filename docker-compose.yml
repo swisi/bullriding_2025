@@ -4,7 +4,7 @@ services:
   web:
     image: ghcr.io/swisi/bullriding_2025:latest
     ports:
-      - "5025:5000"
+      - "5025:5025"
     environment:
       - FLASK_APP=wsgi:app
       - FLASK_ENV=production
