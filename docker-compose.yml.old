@@ -1,0 +1,29 @@
+services:
+  web:
+    image: swisi/bullriding_2024:latest
+    ports:
+      - "5025:5000"
+    environment:
+      - FLASK_APP=app
+      - FLASK_ENV=production
+    volumes:
+      - db-data25:/app/database
+    entrypoint: ["sh", "/app/entrypoint.sh"]
+    command: ["flask", "run", "--host=0.0.0.0"]
+    restart: always    
+    networks:
+      - bullriding25
+
+volumes:
+  db-data25:
+
+
+networks:
+  bullriding25:
+    enable_ipv6: true
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "2a01:4f9:c012:40fe:4::/80"
+          gateway: "2a01:4f9:c012:40fe:4::1"
