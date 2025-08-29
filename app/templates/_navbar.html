@@ -1,0 +1,71 @@
+<nav id="main-navbar" class="navbar navbar-expand-md navbar-light bg-light py-1">
+  <div class="container">
+    <a class="navbar-brand" href="{{ url_for('main.index') }}">{{ site_name }}</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarCollapse">
+      <ul class="navbar-nav mr-auto">
+      <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('main.index') }}">Home</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('main.ranking') }}">Rangliste</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('main.active') }}">Live</a>
+      </li>
+      {% if current_user.is_authenticated %}
+      <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('main.stage') }}">Stage</a>
+      </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('main.participant') }}">Teilnehmer Liste</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('main.participant_add') }}">Teilnehmer erfassen</a>
+        </li>
+      {% endif %}
+      </ul>
+      <ul class="navbar-nav ml-auto">
+      {% if current_user.is_authenticated %}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="adminMenu" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            Admin
+          </a>
+          <div class="dropdown-menu" aria-labelledby="adminMenu">
+            <a class="dropdown-item" href="{{ url_for('main.change_password') }}">Passwort ändern</a>
+            <div class="dropdown-divider"></div>
+            <form method="POST" action="{{ url_for('main.reset_results') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="dropdown-item" style="width:100%; text-align:left;">Resultate löschen</button>
+            </form>
+            <form method="POST" action="{{ url_for('main.reset_participants') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="dropdown-item" style="width:100%; text-align:left;">Teilnehmer löschen</button>
+            </form>
+          </div>
+        </li>
+        <li class="nav-item">
+          <button id="theme-toggle" type="button" class="btn btn-sm btn-outline-secondary ml-2">Dark</button>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('main.logout') }}">Logout</a>
+        </li>
+      {% else %}
+        <li class="nav-item">
+          <button id="theme-toggle" type="button" class="btn btn-sm btn-outline-secondary mr-2">Dark</button>
+        </li>
+        {% if allow_registration %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('main.register') }}">Register</a>
+          </li>
+        {% endif %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('main.login') }}">Login</a>
+        </li>
+      {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>

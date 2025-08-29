@@ -18,8 +18,8 @@
     </script>
     <style>
       /* Critical minimal dark styles to prevent white flash before CSS loads */
-      html.theme-dark, html.theme-dark body { background-color: #121212; color: #e0e0e0; }
-      html.theme-dark .navbar { background-color: #1e1e1e !important; }
+      html.theme-dark, html.theme-dark body { background-color: #2e2e2e; color: #e0e0e0; }
+      html.theme-dark .navbar { background-color: #888888 !important; }
       html.theme-dark .navbar .navbar-brand, 
       html.theme-dark .navbar .nav-link { color: rgba(255,255,255,.85) !important; }
     </style>
@@ -48,70 +48,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" rel="stylesheet">
   </head>
   <body>
-    <nav id="main-navbar" class="navbar navbar-expand-md navbar-light bg-light py-1">
-      <div class="container">
-        <a class="navbar-brand" href="{{ url_for('main.index') }}">{{ site_name }}</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarCollapse">
-          <ul class="navbar-nav mr-auto">
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('main.index') }}">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('main.ranking') }}">Rangliste</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('main.active') }}">Live</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('main.stage') }}">Stage</a>
-          </li>
-          {% if current_user.is_authenticated %}
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('main.participant') }}">Teilnehmer Liste</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('main.participant_add') }}">Teilnehmer erfassen</a>
-            </li>
-          {% endif %}
-          </ul>
-          <ul class="navbar-nav ml-auto">
-          {% if current_user.is_authenticated %}
-            <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="#" id="adminMenu" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                Admin
-              </a>
-              <div class="dropdown-menu" aria-labelledby="adminMenu">
-                <form method="POST" action="{{ url_for('main.reset_results') }}" class="px-3 py-1">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="dropdown-item">Resultate löschen</button>
-                </form>
-                <form method="POST" action="{{ url_for('main.reset_participants') }}" class="px-3 py-1">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="dropdown-item">Teilnehmer löschen</button>
-                </form>
-              </div>
-            </li>
-            <li class="nav-item">
-              <button id="theme-toggle" type="button" class="btn btn-sm btn-outline-secondary ml-2">Dark</button>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('main.logout') }}">Logout</a>
-            </li>
-          {% else %}
-            <li class="nav-item">
-              <button id="theme-toggle" type="button" class="btn btn-sm btn-outline-secondary mr-2">Dark</button>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('main.login') }}">Login</a>
-            </li>
-          {% endif %}
-          </ul>
-        </div>
-      </div>
-    </nav>
+    {% include "_navbar.html" %}
     <div class="container">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}

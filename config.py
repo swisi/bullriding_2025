@@ -43,3 +43,5 @@ class Config:
     # Uploads
     UPLOAD_FOLDER = os.path.join(basedir, "app", "static", "uploads")
     MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))  # 16MB default
+    # Feature flags
+    ALLOW_REGISTRATION = os.getenv("ALLOW_REGISTRATION", "false").lower() in ("1", "true", "yes")

@@ -3,7 +3,7 @@ from flask_login import current_user, login_user, logout_user, login_required
 
 from app import db
 from app.models import User, Participant
-from app.forms import LoginForm, RegistrationForm, ParticipantForm
+from app.forms import LoginForm, RegistrationForm, ParticipantForm, ChangePasswordForm
 from werkzeug.utils import secure_filename
 import os
 from flask import current_app
@@ -42,6 +42,7 @@ def active():
     return render_template('active.html', title='Live', participant=participant)
 
 @bp.route('/stage')
+@login_required
 def stage():
     participant = Participant.query.filter_by(active=True).first()
     return render_template('stage.html', title='Stage', participant=participant)
@@ -77,8 +78,16 @@ def logout():
 
 @bp.route('/register', methods=['GET', 'POST'])
 def register():
+    # If user is already logged in, no need to register
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
+
+    # Temporarily disable self-registration unless explicitly allowed
+    from flask import current_app
+    if not current_app.config.get('ALLOW_REGISTRATION', False):
+        flash('Registrierung ist derzeit deaktiviert. Bitte melden Sie sich an.', 'info')
+        return redirect(url_for('main.login'))
+
     form = RegistrationForm()
     if form.validate_on_submit():
         user = User(username=form.username.data, email=form.email.data)
@@ -88,6 +97,20 @@ def register():
         flash('Congratulations, you are now a registered user!', 'success')
         return redirect(url_for('main.login'))
     return render_template('register.html', title='Register', form=form)
+
+@bp.route('/password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if not current_user.check_password(form.current_password.data):
+            flash('Aktuelles Passwort ist falsch.', 'danger')
+            return redirect(url_for('main.change_password'))
+        current_user.set_password(form.new_password.data)
+        db.session.commit()
+        flash('Passwort erfolgreich geändert.', 'success')
+        return redirect(url_for('main.index'))
+    return render_template('change_password.html', title='Passwort ändern', form=form)
 
 @bp.route('/participants')
 @login_required

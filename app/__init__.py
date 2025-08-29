@@ -57,4 +57,8 @@ def create_app(config_class=Config):
             theme = None
         return {"theme": theme}
 
+    @app.context_processor
+    def inject_flags():
+        return {"allow_registration": app.config.get("ALLOW_REGISTRATION", False)}
+
     return app
