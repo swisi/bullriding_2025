@@ -12,38 +12,78 @@
       .name { font-size: 3.2rem; font-weight: 700; }
       .meta { font-size: 1.5rem; color:#ccc; }
       .photo { max-height: 55vh; max-width: 90vw; object-fit: cover; border-radius: 12px; box-shadow: 0 0 20px rgba(0,0,0,.5); }
-      .times { font-size:1.4rem; }
+      .time-block { min-width:240px; margin: 0 12px 12px; font-size:1.35rem; }
+      .time-head { background:#222; color:#fff; }
     </style>
     <script>
-      // Auto-refresh every 15 seconds
-      setTimeout(function(){ window.location.reload(); }, 15000);
+      // Poll every 5s for active participant change; reload only if changed
+      document.addEventListener('DOMContentLoaded', function() {
+        var currentId = {{ participant.id if participant else 'null' }};
+        function checkActive() {
+          fetch("{{ url_for('main.active_id') }}?t=" + Date.now())
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+              if ((data && data.id) !== currentId) {
+                window.location.reload();
+              }
+            })
+            .catch(function(){ /* ignore network errors */ });
+        }
+        setInterval(checkActive, 5000);
+      });
     </script>
   </head>
   <body>
-    <div class="stage container text-center py-3">
+    <div class="stage container py-3">
       {% if participant %}
-        {% if participant.photo %}
-          <div class="mb-4">
-            <img class="photo" src="{{ url_for('static', filename=participant.photo) }}" alt="Foto von {{ participant.first_name }} {{ participant.last_name }}">
+        <div class="row align-items-start justify-content-center mb-3">
+          <div class="col-lg-5 col-md-6 text-center mb-3">
+            {% if participant.photo %}
+              <img class="photo" style="max-height:40vh" src="{{ url_for('static', filename=participant.photo) }}" alt="Foto von {{ participant.first_name }} {{ participant.last_name }}">
+            {% endif %}
           </div>
-        {% endif %}
-        <div class="name mb-2">{{ participant.first_name }} {{ participant.last_name }}</div>
-        <div class="meta mb-4">Start Nr. {{ participant.start_nr or '-' }}{% if participant.city %} • {{ participant.city }}{% endif %}</div>
+          <div class="col-lg-7 col-md-10">
+            <div class="name mb-2">{{ participant.first_name }} {{ participant.last_name }}</div>
+            <div class="meta mb-4">Start Nr. {{ participant.start_nr or '-' }}{% if participant.city %} • {{ participant.city }}{% endif %}</div>
+          </div>
+        </div>
         <div class="row justify-content-center">
-          <div class="col-auto">
-            <table class="table table-dark table-striped table-bordered times">
-              <tbody>
-                <tr><th>VR1</th><td>{{ participant.time1 or '–' }}</td></tr>
-                <tr><th>VR2</th><td>{{ participant.time2 or '–' }}</td></tr>
-                <tr><th>VR3</th><td>{{ participant.time3 or '–' }}</td></tr>
-                <tr><th>Top VR</th><td>{{ participant.toptime_Vorrunde or '–' }}</td></tr>
-                <tr><th>ZR1</th><td>{{ participant.time4 or '–' }}</td></tr>
-                <tr><th>ZR2</th><td>{{ participant.time5 or '–' }}</td></tr>
-                <tr><th>Top ZR</th><td>{{ participant.toptime_Zwischenrunde or '–' }}</td></tr>
-                <tr><th>Final</th><td>{{ participant.time6 or '–' }}</td></tr>
-                <tr><th>Top Final</th><td>{{ participant.toptime_Finalrunde or '–' }}</td></tr>
-              </tbody>
-            </table>
+          <div class="col-md-10">
+            <div class="row">
+              <div class="col-md-4 mb-3 px-2">
+                <table class="table table-dark table-striped table-bordered time-block">
+                  <thead class="time-head"><tr><th colspan="2" class="text-center">Vorrunde</th></tr></thead>
+                  <tbody>
+                    <tr><th>VR1</th><td>{{ participant.time1 or '–' }}</td></tr>
+                    <tr><th>VR2</th><td>{{ participant.time2 or '–' }}</td></tr>
+                    <tr><th>VR3</th><td>{{ participant.time3 or '–' }}</td></tr>
+                    <tr class="table-secondary text-dark align-middle"><th>Top VR</th><td>{{ participant.toptime_Vorrunde or '–' }}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="col-md-4 mb-3 px-2">
+                <table class="table table-dark table-striped table-bordered time-block">
+                  <thead class="time-head"><tr><th colspan="2" class="text-center">Zwischenrunde</th></tr></thead>
+                  <tbody>
+                    <tr><th>ZR1</th><td>{{ participant.time4 or '–' }}</td></tr>
+                    <tr><th>ZR2</th><td>{{ participant.time5 or '–' }}</td></tr>
+                    <tr class="spacer-row"><td colspan="2" style="visibility:hidden">.</td></tr>
+                    <tr class="table-secondary text-dark align-middle"><th>Top ZR</th><td>{{ participant.toptime_Zwischenrunde or '–' }}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="col-md-4 mb-3 px-2">
+                <table class="table table-dark table-striped table-bordered time-block">
+                  <thead class="time-head"><tr><th colspan="2" class="text-center">Final</th></tr></thead>
+                  <tbody>
+                    <tr><th>Final</th><td>{{ participant.time6 or '–' }}</td></tr>
+                    <tr class="spacer-row"><td colspan="2" style="visibility:hidden">.</td></tr>
+                    <tr class="spacer-row"><td colspan="2" style="visibility:hidden">.</td></tr>
+                    <tr class="table-secondary text-dark align-middle"><th>Top Final</th><td>{{ participant.toptime_Finalrunde or '–' }}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       {% else %}
@@ -52,4 +92,3 @@
     </div>
   </body>
   </html>
-

@@ -1,4 +1,4 @@
-from flask import render_template, flash, redirect, url_for, request, Blueprint
+from flask import render_template, flash, redirect, url_for, request, Blueprint, jsonify
 from flask_login import current_user, login_user, logout_user, login_required
 
 from app import db
@@ -40,6 +40,20 @@ def index():
 def active():
     participant = Participant.query.filter_by(active=True).first()
     return render_template('active.html', title='Live', participant=participant)
+
+@bp.route('/stage')
+def stage():
+    participant = Participant.query.filter_by(active=True).first()
+    return render_template('stage.html', title='Stage', participant=participant)
+
+@bp.route('/active_id')
+def active_id():
+    """Lightweight endpoint to check the current active participant id.
+    Used by the stage/live views to avoid full-page reloads unless needed.
+    """
+    participant = Participant.query.filter_by(active=True).first()
+    pid = participant.id if participant else None
+    return jsonify({"id": pid})
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
