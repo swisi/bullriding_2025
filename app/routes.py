@@ -2,13 +2,44 @@ from flask import render_template, flash, redirect, url_for, request, Blueprint,
 from flask_login import current_user, login_user, logout_user, login_required
 
 from app import db
-from app.models import User, Participant
-from app.forms import LoginForm, RegistrationForm, ParticipantForm, ChangePasswordForm
+from app.models import User, Participant, SiteSettings
+from app.forms import LoginForm, RegistrationForm, ParticipantForm, ChangePasswordForm, AdminSettingsForm
 from werkzeug.utils import secure_filename
 import os
 from flask import current_app
 
 bp = Blueprint('main', __name__)
+
+
+def _apply_hide_prelim_flags(participant):
+    """Ensure a participant is fully qualified when prelim rounds are hidden."""
+    changed = False
+    if not participant.round1_qualified:
+        participant.round1_qualified = True
+        changed = True
+    if not participant.round2_qualified:
+        participant.round2_qualified = True
+        changed = True
+    if not participant.round3_qualified:
+        participant.round3_qualified = True
+        changed = True
+    if not participant.zwischenrunde_qualified:
+        participant.zwischenrunde_qualified = True
+        changed = True
+    return changed
+
+
+def _ensure_hide_prelim_alignment(settings, participants=None):
+    """Apply hide-prelim-round rules to all given participants when required."""
+    if not settings.hide_prelim_rounds:
+        return False
+    if participants is None:
+        participants = Participant.query.all()
+    changed = False
+    for participant in participants:
+        if _apply_hide_prelim_flags(participant):
+            changed = True
+    return changed
 
 @bp.route('/')
 @bp.route('/index')
@@ -27,25 +58,37 @@ def index():
         return render_template('participant.html', title='Teilnehmer hinzufügen', form=form)
 
     if not current_user.is_authenticated:
-        return render_template('ranking.html', title='Rangliste', rankings=participants)
+        settings = SiteSettings.get_settings()
+        if _ensure_hide_prelim_alignment(settings, participants):
+            db.session.commit()
+        return render_template('ranking.html', title='Rangliste', rankings=participants, hide_prelim_rounds=settings.hide_prelim_rounds)
 
-       
+    settings = SiteSettings.get_settings()
+    if _ensure_hide_prelim_alignment(settings, participants):
+        db.session.commit()
     return render_template(
         'index.html', 
         title='Home', 
-        participants=participants, 
+        participants=participants,
+        hide_prelim_rounds=settings.hide_prelim_rounds,
     )
 
 @bp.route('/active')
 def active():
     participant = Participant.query.filter_by(active=True).first()
-    return render_template('active.html', title='Live', participant=participant)
+    settings = SiteSettings.get_settings()
+    if _ensure_hide_prelim_alignment(settings, [p for p in [participant] if p]):
+        db.session.commit()
+    return render_template('active.html', title='Live', participant=participant, hide_prelim_rounds=settings.hide_prelim_rounds)
 
 @bp.route('/stage')
 @login_required
 def stage():
     participant = Participant.query.filter_by(active=True).first()
-    return render_template('stage.html', title='Stage', participant=participant)
+    settings = SiteSettings.get_settings()
+    if _ensure_hide_prelim_alignment(settings, [p for p in [participant] if p]):
+        db.session.commit()
+    return render_template('stage.html', title='Stage', participant=participant, hide_prelim_rounds=settings.hide_prelim_rounds)
 
 @bp.route('/active_id')
 def active_id():
@@ -112,6 +155,21 @@ def change_password():
         return redirect(url_for('main.index'))
     return render_template('change_password.html', title='Passwort ändern', form=form)
 
+
+@bp.route('/admin/settings', methods=['GET', 'POST'])
+@login_required
+def admin_settings():
+    settings = SiteSettings.get_settings()
+    form = AdminSettingsForm(obj=settings)
+    if form.validate_on_submit():
+        settings.hide_prelim_rounds = form.hide_prelim_rounds.data
+        if _ensure_hide_prelim_alignment(settings):
+            db.session.flush()
+        db.session.commit()
+        flash('Einstellungen gespeichert.', 'success')
+        return redirect(url_for('main.admin_settings'))
+    return render_template('admin_settings.html', title='Admin Einstellungen', form=form)
+
 @bp.route('/participants')
 @login_required
 def participant():
@@ -143,6 +201,8 @@ def participant_add():
             file.save(file_path)
             # store relative path under static
             participant.photo = os.path.join('uploads', safe_name).replace('\\', '/')
+        settings = SiteSettings.get_settings()
+        _ensure_hide_prelim_alignment(settings, [participant])
         db.session.add(participant)
         db.session.commit()
         flash('Participant added successfully!', 'success')
@@ -167,6 +227,8 @@ def participant_edit(id):
             file_path = os.path.join(upload_dir, safe_name)
             file.save(file_path)
             participant.photo = os.path.join('uploads', safe_name).replace('\\', '/')
+        settings = SiteSettings.get_settings()
+        _ensure_hide_prelim_alignment(settings, [participant])
         db.session.commit()
         flash('Participant updated successfully!', 'success')
         return redirect(url_for('main.index'))
@@ -355,6 +417,7 @@ def set_active(id):
 @login_required
 def reset_results():
     participants = Participant.query.all()
+    settings = SiteSettings.get_settings()
     for participant in participants:
         participant.active = False
         participant.time1 = None
@@ -368,7 +431,7 @@ def reset_results():
         participant.round3_qualified = False
         participant.zwischenrunde_qualified = False
         participant.final_qualified = False
-    
+    _ensure_hide_prelim_alignment(settings, participants)
     db.session.commit()
     flash('All fields have been reset.', 'success')
     return redirect(url_for('main.index'))
@@ -389,8 +452,11 @@ def ranking():
             p.toptime_Zwischenrunde if p.toptime_Zwischenrunde is not None else float('-inf'),
             p.toptime_Vorrunde if p.toptime_Vorrunde is not None else float('-inf')
     ), reverse=True)
+    settings = SiteSettings.get_settings()
+    if _ensure_hide_prelim_alignment(settings, participants):
+        db.session.commit()
 
-    return render_template('ranking.html', title='Rangliste', rankings=rankings)
+    return render_template('ranking.html', title='Rangliste', rankings=rankings, hide_prelim_rounds=settings.hide_prelim_rounds)
 
 
  

@@ -37,7 +37,7 @@
       </style>
 
       <div class="row mt-2 justify-content-center text-center">
-        <div class="col-md-4 mb-3 px-2">
+        <div class="col-md-4 mb-3 px-2 {% if hide_prelim_rounds %}d-none{% endif %}"{% if hide_prelim_rounds %} aria-hidden="true"{% endif %}>
           <table class="table table-striped table-hover table-sm time-block">
             <thead class="thead-dark">
               <tr><th colspan="2">Vorrunde</th></tr>

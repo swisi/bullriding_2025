@@ -89,3 +89,8 @@ class ParticipantForm(FlaskForm):
             return float(value) if value.strip() else None
         except ValueError:
             return None
+
+
+class AdminSettingsForm(FlaskForm):
+    hide_prelim_rounds = BooleanField('Vorrunden ausblenden (ohne Vorrunden)')
+    submit = SubmitField('Speichern')

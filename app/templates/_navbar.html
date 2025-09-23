@@ -35,6 +35,7 @@
           </a>
           <div class="dropdown-menu" aria-labelledby="adminMenu">
             <a class="dropdown-item" href="{{ url_for('main.change_password') }}">Passwort ändern</a>
+            <a class="dropdown-item" href="{{ url_for('main.admin_settings') }}">Einstellungen</a>
             <div class="dropdown-divider"></div>
             <form method="POST" action="{{ url_for('main.reset_results') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

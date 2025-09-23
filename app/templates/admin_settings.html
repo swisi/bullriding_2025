@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="py-4">
+    <h2 class="mb-4">Admin Einstellungen</h2>
+    <form method="POST" action="{{ url_for('main.admin_settings') }}" class="mb-4">
+      {{ form.hidden_tag() }}
+      <div class="form-check mb-3">
+        {{ form.hide_prelim_rounds(class_='form-check-input') }}
+        {{ form.hide_prelim_rounds.label(class_='form-check-label') }}
+      </div>
+      {{ form.submit(class_='btn btn-primary') }}
+    </form>
+  </div>
+{% endblock %}

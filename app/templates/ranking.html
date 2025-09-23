@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+    {% set hide_vr = hide_prelim_rounds|default(false) %}
     <h2>Aktuelle Rangliste</h2>
     <table class="table table-striped table-sm">
       <thead>
@@ -7,12 +8,16 @@
           <th>Start Nr.</th>
           <th>Vorname</th>
           <th>Name</th>
-          <th>Zeit 1</th>
-          <th>Zeit 2</th>
-          <th>Zeit 3</th>
-          <th>Zeit 4</th>
-          <th>Zeit 5</th>
-          <th>Zeit 6</th>
+          {% if not hide_vr %}
+          <th>VR1</th>
+          <th>VR2</th>
+          <th>VR3</th>
+          <th>Top VR</th>
+          {% endif %}
+          <th>ZR1</th>
+          <th>ZR2</th>
+          <th>Top ZR</th>
+          <th>Final</th>
         </tr>
       </thead>
       <tbody>
@@ -21,11 +26,15 @@
             <td>{{ ranking.start_nr }}</td>
             <td>{{ ranking.first_name }}</td>
             <td>{{ ranking.last_name }}</td>
+            {% if not hide_vr %}
             <td>{{ ranking.time1 | default('') }}</td>
             <td>{{ ranking.time2 | default('') }}</td>
             <td>{{ ranking.time3 | default('') }}</td>
+            <td>{{ ranking.toptime_Vorrunde | default('') }}</td>
+            {% endif %}
             <td>{{ ranking.time4 | default('') }}</td>
             <td>{{ ranking.time5 | default('') }}</td>
+            <td>{{ ranking.toptime_Zwischenrunde | default('') }}</td>
             <td>{{ ranking.time6 | default('') }}</td>
           </tr>
         {% endfor %}

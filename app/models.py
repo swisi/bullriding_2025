@@ -58,3 +58,19 @@ class Participant(db.Model):
     def toptime_Finalrunde(self):
         times = [t for t in [self.time6] if t is not None]
         return max(times) if times else None
+
+
+class SiteSettings(db.Model):
+    __tablename__ = 'site_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    hide_prelim_rounds = db.Column(db.Boolean, nullable=False, default=False)
+
+    @classmethod
+    def get_settings(cls):
+        settings = cls.query.first()
+        if settings is None:
+            settings = cls()
+            db.session.add(settings)
+            db.session.commit()
+        return settings
