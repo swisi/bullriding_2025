@@ -35,11 +35,11 @@ on:
         type: string
         default: "--nofollow-import-to=sqlalchemy.dialects.oracle*"
       upload-release:
-        description: Artefakt zusätzlich an ein GitHub-Release anhängen (benötigt Tag-Ref)
+        description: Artefakt zusätzlich an ein GitHub-Release anhängen
         type: boolean
         default: true
       release-tag:
-        description: Tag-Name fürs Release (nur relevant, falls du die Bedingung später erweiterst)
+        description: Tag-Name fürs Release (z. B. v1.2.3). Leer lassen, wenn du bereits auf einem Git-Tag baust.
         type: string
         default: ""
 
@@ -177,7 +177,8 @@ jobs:
   release:
     name: (Optional) Release anhängen
     needs: nuitka-build
-    if: ${{ github.event.inputs.upload-release == 'true' && startsWith(github.ref, 'refs/tags/') }}
+    # Läuft wenn Upload gewünscht ist UND (bereits auf einem Tag gebaut wird ODER ein release-tag eingegeben wurde)
+    if: ${{ github.event.inputs.upload-release == 'true' && (startsWith(github.ref, 'refs/tags/') || github.event.inputs['release-tag'] != '') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -192,5 +193,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/**
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.event.inputs['release-tag'] }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
