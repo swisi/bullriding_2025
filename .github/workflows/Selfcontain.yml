@@ -7,8 +7,12 @@ on:
         description: Python-Version
         type: string
         default: "3.12"
+      project-dir:
+        description: Repo-Ordner, in dem dein Code liegt (z. B. . oder backend)
+        type: string
+        default: "."
       entrypoint:
-        description: Pfad zu deinem Python-Entry (z. B. src/app.py)
+        description: Pfad zu deinem Python-Entry relativ zu project-dir (z. B. src/app.py)
         type: string
         default: "src/app.py"
       onefile:
@@ -36,54 +40,66 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ github.event.inputs['python-version'] }}
 
-      # Optional: Cache für pip (falls requirements.txt existiert)
       - name: Cache pip (Windows)
-        if: hashFiles('requirements.txt') != ''
+        if: hashFiles('**/requirements.txt') != ''
         uses: actions/cache@v4
         with:
           path: ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-pip-${{ github.event.inputs['python-version'] }}-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ github.event.inputs['python-version'] }}-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       - name: Install dependencies (PowerShell)
         shell: pwsh
+        working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
         run: |
           python -m pip install --upgrade pip
           if (Test-Path "requirements.txt") { pip install -r requirements.txt }
           pip install nuitka
 
+      - name: Validate entrypoint (PowerShell)
+        shell: pwsh
+        working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
+        run: |
+          $entryRel = "${{ github.event.inputs.entrypoint }}"
+          $entry = Resolve-Path -LiteralPath $entryRel -ErrorAction SilentlyContinue
+          if (-not $entry) {
+            Write-Host ">>> Inhalt von $PWD (oberste 3 Ebenen) zur Diagnose:"
+            Get-ChildItem -Recurse -Depth 3 | Select-Object FullName | Format-Table -AutoSize
+            throw "Entrypoint '$entryRel' wurde nicht gefunden relativ zu '$PWD'. Bitte 'project-dir' und 'entrypoint' prüfen."
+          }
+          "ENTRY_ABS=$entry" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Build with Nuitka (PowerShell)
         shell: pwsh
+        working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
         run: |
           $flags = @()
-
-          # Genau eine der beiden Optionen setzen (onefile bevorzugt)
           if ("${{ github.event.inputs.onefile }}" -eq "true") {
             $flags += "--onefile"
           } elseif ("${{ github.event.inputs.standalone }}" -eq "true") {
             $flags += "--standalone"
           }
-
-          # Sinnvolle Defaults
           $flags += "--follow-imports"
           $flags += "--output-dir=dist"
 
-          $entry   = "${{ github.event.inputs.entrypoint }}"
           $outName = "${{ github.event.inputs['output-name'] }}"
           if ([string]::IsNullOrWhiteSpace($outName)) { $outName = "app.exe" }
 
           Write-Host "Nuitka Flags: $($flags -join ' ')"
-          Write-Host "Entry: $entry"
+          Write-Host "Entry: $env:ENTRY_ABS"
           Write-Host "Output: $outName"
 
-          python -m nuitka @flags --output-filename="$outName" "$entry"
+          python -m nuitka @flags --output-filename="$outName" "$env:ENTRY_ABS"
 
           Write-Host "dist-Inhalt:"
           Get-ChildItem -Recurse -Force dist | Format-Table -AutoSize
