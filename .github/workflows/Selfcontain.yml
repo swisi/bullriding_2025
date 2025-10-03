@@ -40,42 +40,50 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ inputs.python-version }}
+          python-version: ${{ github.event.inputs['python-version'] }}
 
       # Optional: Cache für pip (falls requirements.txt existiert)
-      - name: Cache pip
+      - name: Cache pip (Windows)
         if: hashFiles('requirements.txt') != ''
         uses: actions/cache@v4
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ inputs.python-version }}-${{ hashFiles('requirements.txt') }}
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ github.event.inputs['python-version'] }}-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       - name: Install dependencies (PowerShell)
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           if (Test-Path "requirements.txt") { pip install -r requirements.txt }
           pip install nuitka
 
       - name: Build with Nuitka (PowerShell)
+        shell: pwsh
         run: |
-          $flags = ""
-          if ("${{ inputs.onefile }}" -eq "true") { $flags += " --onefile" }
-          if ("${{ inputs.standalone }}" -eq "true") { $flags += " --standalone" }
+          $flags = @()
+
+          # Genau eine der beiden Optionen setzen (onefile bevorzugt)
+          if ("${{ github.event.inputs.onefile }}" -eq "true") {
+            $flags += "--onefile"
+          } elseif ("${{ github.event.inputs.standalone }}" -eq "true") {
+            $flags += "--standalone"
+          }
 
           # Sinnvolle Defaults
-          $flags += " --follow-imports --output-dir=dist"
+          $flags += "--follow-imports"
+          $flags += "--output-dir=dist"
 
-          $entry = "${{ inputs.entrypoint }}"
-          $outName = "${{ inputs.output-name }}"
+          $entry   = "${{ github.event.inputs.entrypoint }}"
+          $outName = "${{ github.event.inputs['output-name'] }}"
           if ([string]::IsNullOrWhiteSpace($outName)) { $outName = "app.exe" }
 
-          Write-Host "Nuitka Flags:$flags"
+          Write-Host "Nuitka Flags: $($flags -join ' ')"
           Write-Host "Entry: $entry"
           Write-Host "Output: $outName"
 
-          python -m nuitka $flags --output-filename="$outName" "$entry"
+          python -m nuitka @flags --output-filename="$outName" "$entry"
 
           Write-Host "dist-Inhalt:"
           Get-ChildItem -Recurse -Force dist | Format-Table -AutoSize
@@ -83,28 +91,28 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nuitka-windows-${{ inputs.python-version }}
-          path: |
-            dist/**
+          name: nuitka-windows-${{ github.event.inputs['python-version'] }}
+          path: dist/**
           if-no-files-found: error
 
   release:
     name: (Optional) Release anhängen
     needs: nuitka-build
-    if: ${{ inputs.upload-release == true }}
+    if: ${{ github.event.inputs.upload-release == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: nuitka-windows-${{ inputs.python-version }}
+          name: nuitka-windows-${{ github.event.inputs['python-version'] }}
           path: dist
 
       - name: Prüfen, ob Tag vorhanden ist
         id: tagcheck
+        shell: bash
         run: |
           REF="${GITHUB_REF##*/}"
-          echo "ref=$REF" >> $GITHUB_OUTPUT
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_REF" != refs/tags/* ]]; then
             echo "Kein Tag auf der aktuellen Ref. Bitte mit Tag auslösen (z. B. v1.2.3)." >&2
             exit 1
@@ -113,7 +121,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/**
+          files: dist/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
