@@ -1,4 +1,4 @@
-name: Build (Nuitka) – manual (Windows/PowerShell)
+name: Build Nuitka Windows – Manual
 
 on:
   workflow_dispatch:
