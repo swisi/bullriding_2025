@@ -21,7 +21,7 @@ on:
         options:
           - onefile
           - standalone
-        default: onefile
+        default: standalone
       output-name:
         description: Dateiname ohne Pfad (z. B. app.exe)
         type: string
@@ -42,6 +42,10 @@ on:
         description: Tag-Name fürs Release (z. B. v1.2.3). Leer lassen, wenn du bereits auf einem Git-Tag baust.
         type: string
         default: ""
+      sign-artifacts:
+        description: EXE/DLLs nach dem Build signieren (PFX aus Secrets)
+        type: boolean
+        default: false
 
 jobs:
   nuitka-build:
@@ -128,6 +132,7 @@ jobs:
 
           if ("${{ github.event.inputs['build-mode'] }}" -eq "onefile") {
             $flags += "--onefile"
+            $flags += "--onefile-no-compression"   # weniger AV-Trigger
           } else {
             $flags += "--standalone"
           }
@@ -135,6 +140,13 @@ jobs:
           if ("${{ github.event.inputs.use-clang }}" -eq "true") {
             $flags += "--clang"
           }
+
+          # (Optional) Windows Metadaten – hilft Reputation
+          $flags += "--windows-company-name=Bullriding"
+          $flags += "--windows-product-name=Bullriding"
+          $flags += "--windows-file-description=Bullriding Steuerung"
+          $flags += "--windows-file-version=1.0.0.0"
+          $flags += "--windows-product-version=1.0.0.0"
 
           $flags += "--follow-imports"
           $flags += "--output-dir=dist"
@@ -166,6 +178,52 @@ jobs:
 
           Write-Host "dist-Inhalt:"
           Get-ChildItem -Recurse -Force dist | Format-Table -AutoSize
+
+      - name: Prepare code-signing cert (decode PFX)
+        if: ${{ github.event.inputs.sign-artifacts == 'true' }}
+        shell: pwsh
+        run: |
+          if (-not "${{ secrets.CS_PFX_B64 }}") { throw "Secret CS_PFX_B64 fehlt." }
+          if (-not "${{ secrets.CS_PFX_PASSWORD }}") { throw "Secret CS_PFX_PASSWORD fehlt." }
+          $pfxBytes = [Convert]::FromBase64String("${{ secrets.CS_PFX_B64 }}")
+          $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+          "PFX_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Code-sign EXE/DLLs (Authenticode)
+        if: ${{ github.event.inputs.sign-artifacts == 'true' }}
+        shell: pwsh
+        run: |
+          # signtool lokalisieren
+          $signtool = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\x64\signtool.exe"
+          if (-not (Test-Path $signtool)) {
+            $signtool = "${env:ProgramFiles(x86)}\Microsoft SDKs\ClickOnce\SignTool\signtool.exe"
+          }
+          if (-not (Test-Path $signtool)) {
+            # Versuch via vswhere
+            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+            if (Test-Path $vswhere) {
+              $vsPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+              if ($vsPath) {
+                $cand = Get-ChildItem "$vsPath" -Recurse -File -Filter signtool.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($cand) { $signtool = $cand.FullName }
+              }
+            }
+          }
+          if (-not (Test-Path $signtool)) { throw "signtool.exe nicht gefunden." }
+
+          $files = Get-ChildItem -Recurse -File dist -Include *.exe,*.dll
+          if ($files.Count -eq 0) { throw "Keine EXE/DLLs zum Signieren gefunden." }
+
+          foreach ($f in $files) {
+            & $signtool sign `
+              /fd SHA256 `
+              /tr http://timestamp.digicert.com `
+              /td SHA256 `
+              /f "$env:PFX_PATH" `
+              /p "${{ secrets.CS_PFX_PASSWORD }}" `
+              "$($f.FullName)"
+          }
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
