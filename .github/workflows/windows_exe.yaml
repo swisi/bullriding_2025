@@ -1,0 +1,219 @@
+name: Build Nuitka Windows – Manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: Python-Version
+        type: string
+        default: "3.12"
+      project-dir:
+        description: Repo-Ordner, in dem dein Code liegt (z. B. . oder backend)
+        type: string
+        default: "."
+      entrypoint:
+        description: Pfad zum Python-Entry relativ zu project-dir (z. B. src/app.py). Wird bei Bedarf automatisch gesucht.
+        type: string
+        default: "app.py"
+      onefile:
+        description: Einzelne Datei (--onefile)
+        type: boolean
+        default: true
+      standalone:
+        description: Standalone inkl. Runtime (--standalone)
+        type: boolean
+        default: true
+      output-name:
+        description: Dateiname ohne Pfad (z. B. app.exe)
+        type: string
+        default: "Bullriding.exe"
+      use-clang:
+        description: clang als Compiler verwenden (empfohlen gegen C1002)
+        type: boolean
+        default: true
+      nuitka-extra-args:
+        description: Zusätzliche Nuitka-Argumente (Leerzeichen-getrennt)
+        type: string
+        default: "--nofollow-import-to=sqlalchemy.dialects.oracle*"
+      upload-release:
+        description: Artefakt zusätzlich an ein GitHub-Release anhängen (benötigt Tag-Ref)
+        type: boolean
+        default: true
+      release-tag:
+        description: Tag-Name fürs Release (z. B. v1.2.3). (Nur nötig, falls du später ohne echten Git-Tag releasen willst)
+        type: string
+        default: "v0.0.0"
+      release-draft:
+        description: Release als Draft erstellen
+        type: boolean
+        default: false
+      release-prerelease:
+        description: Als Pre-Release markieren
+        type: boolean
+        default: false
+
+jobs:
+  nuitka-build:
+    name: Nuitka Build (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ github.event.inputs['python-version'] }}
+
+      - name: Cache pip (Windows)
+        if: hashFiles('**/requirements.txt') != ''
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ github.event.inputs['python-version'] }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies (PowerShell)
+        shell: pwsh
+        working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
+        run: |
+          python -m pip install --upgrade pip
+          if (Test-Path "requirements.txt") { pip install -r requirements.txt }
+          pip install nuitka
+
+      - name: Validate entrypoint (PowerShell, Auto-Suche + Priorität)
+        shell: pwsh
+        working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
+        run: |
+          $entryRel = "${{ github.event.inputs.entrypoint }}"
+          $entryAbs = Resolve-Path -LiteralPath $entryRel -ErrorAction SilentlyContinue
+
+          if (-not $entryAbs) {
+            Write-Host "Entrypoint '$entryRel' nicht gefunden. Starte Auto-Suche…"
+
+            # Priorität: erster Eintrag gewinnt
+            $candidateNames   = @('app.py','wsgi.py','main.py','run.py','server.py')
+            $excludePatterns  = @('\.git', '\.venv', 'env', 'venv', 'node_modules', 'migrations', '\.mypy_cache', '\.pytest_cache')
+
+            $allFiles = Get-ChildItem -Recurse -File -Depth 8 -ErrorAction SilentlyContinue
+
+            # Saubere Filterung
+            $filtered = @()
+            foreach ($f in $allFiles) {
+              if (-not ($candidateNames -contains $f.Name)) { continue }
+              $full = $f.FullName
+              $isExcluded = $false
+              foreach ($pat in $excludePatterns) {
+                if ($full -match $pat) { $isExcluded = $true; break }
+              }
+              if (-not $isExcluded) { $filtered += $f }
+            }
+
+            if ($filtered.Count -eq 0) {
+              Write-Host ">>> Inhalt (Top 3 Ebenen) zur Diagnose:"
+              Get-ChildItem -Recurse -Depth 3 | Select-Object FullName | Format-Table -AutoSize
+              throw "Kein Entrypoint gefunden. Bitte 'project-dir' und 'entrypoint' prüfen."
+            }
+
+            # Bei mehreren Treffern nach Priorität wählen
+            $ordered = $filtered | Sort-Object -Property @{ Expression = { [array]::IndexOf($candidateNames, $_.Name) } }, FullName
+            $entryAbs = $ordered[0].FullName
+            Write-Host "Kandidat gewählt (nach Priorität): $entryAbs"
+          }
+
+          "ENTRY_ABS=$entryAbs" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Verwende Entrypoint: $entryAbs"
+
+      - name: Build with Nuitka (PowerShell)
+        shell: pwsh
+        working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
+        env:
+          CL: "/Zm200"                          # mehr Heap für MSVC
+          NUITKA_ASSUME_YES_FOR_DOWNLOADS: "1"  # keine interaktiven Prompts
+        run: |
+          $flags = @()
+
+          if ("${{ github.event.inputs.onefile }}" -eq "true") {
+            $flags += "--onefile"
+          } elseif ("${{ github.event.inputs.standalone }}" -eq "true") {
+            $flags += "--standalone"
+          }
+
+          if ("${{ github.event.inputs.use-clang }}" -eq "true") {
+            $flags += "--clang"
+          }
+
+          $flags += "--follow-imports"
+          $flags += "--output-dir=dist"
+          $flags += "--assume-yes-for-downloads"
+
+          # Extra-Args robust tokenisieren; lose "--" entfernen
+          $extraRaw = "${{ github.event.inputs['nuitka-extra-args'] }}".Trim()
+          if ($extraRaw) {
+            $errors = $null
+            $tokens = [System.Management.Automation.PSParser]::Tokenize($extraRaw, [ref]$errors)
+            $parts  = @()
+            foreach ($t in $tokens) {
+              if ($t.Type -in @('CommandArgument','String','Number')) {
+                $parts += $extraRaw.Substring($t.Start, $t.Length)
+              }
+            }
+            $parts = $parts | Where-Object { $_ -and $_.Trim() -ne '--' }
+            $flags += $parts
+          }
+
+          $outName = "${{ github.event.inputs['output-name'] }}"
+          if ([string]::IsNullOrWhiteSpace($outName)) { $outName = "app.exe" }
+
+          Write-Host "Nuitka Flags: $($flags -join ' ')"
+          Write-Host "Entry: $env:ENTRY_ABS"
+          Write-Host "Output: $outName"
+
+          python -m nuitka @flags --output-filename="$outName" "$env:ENTRY_ABS"
+
+          Write-Host "dist-Inhalt:"
+          Get-ChildItem -Recurse -Force dist | Format-Table -AutoSize
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuitka-windows-${{ github.event.inputs['python-version'] }}
+          path: dist/**
+          if-no-files-found: error
+
+  release:
+    name: (Optional) Release anhängen
+    needs: nuitka-build
+    if: ${{ github.event.inputs.upload-release == 'true' && startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nuitka-windows-${{ github.event.inputs['python-version'] }}
+          path: dist
+
+      - name: Prüfen, ob Tag vorhanden ist
+        id: tagcheck
+        shell: bash
+        run: |
+          REF="${GITHUB_REF##*/}"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            echo "Kein Tag auf der aktuellen Ref. Bitte mit Tag auslösen (z. B. v1.2.3)." >&2
+            exit 1
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
