@@ -26,7 +26,7 @@ on:
       output-name:
         description: Dateiname ohne Pfad (z. B. app.exe)
         type: string
-        default: "app.exe"
+        default: "Bullriding.exe"
       upload-release:
         description: Artefakt zusätzlich an ein GitHub-Release anhängen (benötigt Tag-Ref)
         type: boolean
