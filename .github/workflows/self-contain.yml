@@ -10,11 +10,11 @@ on:
       project-dir:
         description: Repo-Ordner, in dem dein Code liegt (z. B. . oder backend)
         type: string
-        default: "/"
+        default: "."
       entrypoint:
-        description: Pfad zum Python-Entry relativ zu project-dir (z. B. src/app.py)
+        description: Pfad zum Python-Entry relativ zu project-dir (z. B. src/app.py). Wird bei Bedarf automatisch gesucht.
         type: string
-        default: "app.py"
+        default: "src/app.py"
       onefile:
         description: Einzelne Datei (--onefile)
         type: boolean
@@ -26,7 +26,15 @@ on:
       output-name:
         description: Dateiname ohne Pfad (z. B. app.exe)
         type: string
-        default: "Bullriding.exe"
+        default: "app.exe"
+      use-clang:
+        description: clang als Compiler verwenden (empfohlen gegen C1002)
+        type: boolean
+        default: true
+      nuitka-extra-args:
+        description: Zusätzliche Nuitka-Argumente (Leerzeichen-getrennt)
+        type: string
+        default: "--nofollow-import-to=sqlalchemy.dialects.oracle*"
       upload-release:
         description: Artefakt zusätzlich an ein GitHub-Release anhängen (benötigt Tag-Ref)
         type: boolean
@@ -66,7 +74,7 @@ jobs:
           if (Test-Path "requirements.txt") { pip install -r requirements.txt }
           pip install nuitka
 
-      - name: Validate entrypoint (PowerShell, mit Auto-Suche)
+      - name: Validate entrypoint (PowerShell, Auto-Suche + Priorität)
         shell: pwsh
         working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
         run: |
@@ -74,38 +82,26 @@ jobs:
           $entryAbs = Resolve-Path -LiteralPath $entryRel -ErrorAction SilentlyContinue
 
           if (-not $entryAbs) {
-            Write-Host "Entrypoint '$entryRel' nicht gefunden. Starte Auto-Suche nach Kandidaten..."
-            # Kandidatenliste
-            $candidateNames = @('app.py','main.py','wsgi.py','server.py','run.py')
-
-            # Verzeichnisse ausschliessen
+            Write-Host "Entrypoint '$entryRel' nicht gefunden. Starte Auto-Suche…"
+            $candidateNames = @('app.py','wsgi.py','main.py','run.py','server.py')  # Priorität
             $excludePatterns = @('\.git', '\.venv', 'env', 'venv', 'node_modules', 'migrations', '\.mypy_cache', '\.pytest_cache')
 
             $allFiles = Get-ChildItem -Recurse -File -Depth 8 2>$null
             $filtered = $allFiles | Where-Object {
-              $nameMatch = $candidateNames -contains $_.Name
-              if (-not $nameMatch) { return $false }
-              $full = $_.FullName
-              # Ausschlüsse anwenden
-              $isExcluded = $false
-              foreach ($pat in $excludePatterns) {
-                if ($full -match $pat) { $isExcluded = $true; break }
-              }
-              return -not $isExcluded
+              ($candidateNames -contains $_.Name) -and (
+                ($p = $_.FullName; -not ($excludePatterns | ForEach-Object { $p -match $_ } | Where-Object { $_ }))
+              )
             }
 
-            if ($filtered.Count -eq 1) {
-              $entryAbs = $filtered[0].FullName
-              Write-Host "Genau ein Kandidat gefunden: $entryAbs"
-            } elseif ($filtered.Count -gt 1) {
-              Write-Host "Mehrere mögliche Entrypoints gefunden:"
-              $filtered | ForEach-Object { Write-Host " - $($_.FullName)" }
-              throw "Mehrdeutig. Bitte gib 'project-dir' und 'entrypoint' explizit an."
-            } else {
+            if ($filtered.Count -eq 0) {
               Write-Host ">>> Inhalt (Top 3 Ebenen) zur Diagnose:"
               Get-ChildItem -Recurse -Depth 3 | Select-Object FullName | Format-Table -AutoSize
               throw "Kein Entrypoint gefunden. Bitte 'project-dir' und 'entrypoint' prüfen."
             }
+
+            $ordered = $filtered | Sort-Object -Property @{Expression={ [array]::IndexOf($candidateNames, $_.Name) }}
+            $entryAbs = $ordered[0].FullName
+            Write-Host "Mehrere Kandidaten gefunden. Wähle nach Priorität: $entryAbs"
           }
 
           "ENTRY_ABS=$entryAbs" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -114,19 +110,35 @@ jobs:
       - name: Build with Nuitka (PowerShell)
         shell: pwsh
         working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
+        env:
+          # Mehr Compiler-Heap für MSVC (wirksam, auch wenn clang deaktiviert ist)
+          CL: "/Zm200"
         run: |
           $flags = @()
 
-          # onefile bevorzugt; sonst standalone wenn gewünscht
           if ("${{ github.event.inputs.onefile }}" -eq "true") {
             $flags += "--onefile"
           } elseif ("${{ github.event.inputs.standalone }}" -eq "true") {
             $flags += "--standalone"
           }
 
-          # sinnvolle Defaults
+          if ("${{ github.event.inputs.use-clang }}" -eq "true") {
+            $flags += "--clang"
+          }
+
+          # Sinnvolle Defaults
           $flags += "--follow-imports"
           $flags += "--output-dir=dist"
+
+          # Zusätzliche Args aus Input (leer = keine)
+          $extra = "${{ github.event.inputs['nuitka-extra-args'] }}".Trim()
+          if ($extra) {
+            # Split auf Whitespace, respektiert Quotes
+            $parsed = [System.Management.Automation.Language.Parser]::ParseInput($extra, [ref]$null, [ref]$null).EndBlock.Statements.Extent.Text
+            # Fallback: einfache Split-Variante falls oben leer zurückkommt
+            if (-not $parsed) { $parsed = $extra }
+            $flags += $parsed -split '\s+(?=(?:[^'']*''[^'']*'')*[^'']*$)(?=(?:[^""]*""[^""]*"")*[^""]*$)'
+          }
 
           $outName = "${{ github.event.inputs['output-name'] }}"
           if ([string]::IsNullOrWhiteSpace($outName)) { $outName = "app.exe" }
