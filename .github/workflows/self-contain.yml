@@ -39,6 +39,18 @@ on:
         description: Artefakt zusätzlich an ein GitHub-Release anhängen (benötigt Tag-Ref)
         type: boolean
         default: true
+              release-tag:
+        description: Tag-Name fürs Release (z. B. v1.2.3). Erlaubt Releases ohne Git-Tag.
+        type: string
+        default: ""
+      release-draft:
+        description: Release als Draft erstellen
+        type: boolean
+        default: true
+      release-prerelease:
+        description: Als Pre-Release markieren
+        type: boolean
+        default: false
 
 jobs:
   nuitka-build:
