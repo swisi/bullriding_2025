@@ -1,5 +1,4 @@
-name: docker-image-manual
-
+name: Build Docker Image - Manual
 on:
   workflow_dispatch:
     inputs:
