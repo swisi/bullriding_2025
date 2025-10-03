@@ -12,7 +12,7 @@ on:
         type: string
         default: "."
       entrypoint:
-        description: Pfad zu deinem Python-Entry relativ zu project-dir (z. B. src/app.py)
+        description: Pfad zum Python-Entry relativ zu project-dir (z. B. src/app.py)
         type: string
         default: "src/app.py"
       onefile:
@@ -66,29 +66,65 @@ jobs:
           if (Test-Path "requirements.txt") { pip install -r requirements.txt }
           pip install nuitka
 
-      - name: Validate entrypoint (PowerShell)
+      - name: Validate entrypoint (PowerShell, mit Auto-Suche)
         shell: pwsh
         working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
         run: |
           $entryRel = "${{ github.event.inputs.entrypoint }}"
-          $entry = Resolve-Path -LiteralPath $entryRel -ErrorAction SilentlyContinue
-          if (-not $entry) {
-            Write-Host ">>> Inhalt von $PWD (oberste 3 Ebenen) zur Diagnose:"
-            Get-ChildItem -Recurse -Depth 3 | Select-Object FullName | Format-Table -AutoSize
-            throw "Entrypoint '$entryRel' wurde nicht gefunden relativ zu '$PWD'. Bitte 'project-dir' und 'entrypoint' prüfen."
+          $entryAbs = Resolve-Path -LiteralPath $entryRel -ErrorAction SilentlyContinue
+
+          if (-not $entryAbs) {
+            Write-Host "Entrypoint '$entryRel' nicht gefunden. Starte Auto-Suche nach Kandidaten..."
+            # Kandidatenliste
+            $candidateNames = @('app.py','main.py','wsgi.py','server.py','run.py')
+
+            # Verzeichnisse ausschliessen
+            $excludePatterns = @('\.git', '\.venv', 'env', 'venv', 'node_modules', 'migrations', '\.mypy_cache', '\.pytest_cache')
+
+            $allFiles = Get-ChildItem -Recurse -File -Depth 8 2>$null
+            $filtered = $allFiles | Where-Object {
+              $nameMatch = $candidateNames -contains $_.Name
+              if (-not $nameMatch) { return $false }
+              $full = $_.FullName
+              # Ausschlüsse anwenden
+              $isExcluded = $false
+              foreach ($pat in $excludePatterns) {
+                if ($full -match $pat) { $isExcluded = $true; break }
+              }
+              return -not $isExcluded
+            }
+
+            if ($filtered.Count -eq 1) {
+              $entryAbs = $filtered[0].FullName
+              Write-Host "Genau ein Kandidat gefunden: $entryAbs"
+            } elseif ($filtered.Count -gt 1) {
+              Write-Host "Mehrere mögliche Entrypoints gefunden:"
+              $filtered | ForEach-Object { Write-Host " - $($_.FullName)" }
+              throw "Mehrdeutig. Bitte gib 'project-dir' und 'entrypoint' explizit an."
+            } else {
+              Write-Host ">>> Inhalt (Top 3 Ebenen) zur Diagnose:"
+              Get-ChildItem -Recurse -Depth 3 | Select-Object FullName | Format-Table -AutoSize
+              throw "Kein Entrypoint gefunden. Bitte 'project-dir' und 'entrypoint' prüfen."
+            }
           }
-          "ENTRY_ABS=$entry" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          "ENTRY_ABS=$entryAbs" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Verwende Entrypoint: $entryAbs"
 
       - name: Build with Nuitka (PowerShell)
         shell: pwsh
         working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
         run: |
           $flags = @()
+
+          # onefile bevorzugt; sonst standalone wenn gewünscht
           if ("${{ github.event.inputs.onefile }}" -eq "true") {
             $flags += "--onefile"
           } elseif ("${{ github.event.inputs.standalone }}" -eq "true") {
             $flags += "--standalone"
           }
+
+          # sinnvolle Defaults
           $flags += "--follow-imports"
           $flags += "--output-dir=dist"
 
