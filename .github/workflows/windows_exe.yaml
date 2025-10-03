@@ -15,14 +15,13 @@ on:
         description: Pfad zum Python-Entry relativ zu project-dir (z. B. src/app.py). Wird bei Bedarf automatisch gesucht.
         type: string
         default: "app.py"
-      onefile:
-        description: Einzelne Datei (--onefile)
-        type: boolean
-        default: true
-      standalone:
-        description: Standalone inkl. Runtime (--standalone)
-        type: boolean
-        default: true
+      build-mode:
+        description: Build-Modus (onefile oder standalone)
+        type: choice
+        options:
+          - onefile
+          - standalone
+        default: onefile
       output-name:
         description: Dateiname ohne Pfad (z. B. app.exe)
         type: string
@@ -40,17 +39,9 @@ on:
         type: boolean
         default: true
       release-tag:
-        description: Tag-Name fürs Release (z. B. v1.2.3). (Nur nötig, falls du später ohne echten Git-Tag releasen willst)
+        description: Tag-Name fürs Release (nur relevant, falls du die Bedingung später erweiterst)
         type: string
-        default: "v0.0.0"
-      release-draft:
-        description: Release als Draft erstellen
-        type: boolean
-        default: false
-      release-prerelease:
-        description: Als Pre-Release markieren
-        type: boolean
-        default: false
+        default: ""
 
 jobs:
   nuitka-build:
@@ -96,13 +87,11 @@ jobs:
           if (-not $entryAbs) {
             Write-Host "Entrypoint '$entryRel' nicht gefunden. Starte Auto-Suche…"
 
-            # Priorität: erster Eintrag gewinnt
-            $candidateNames   = @('app.py','wsgi.py','main.py','run.py','server.py')
+            $candidateNames   = @('app.py','wsgi.py','main.py','run.py','server.py') # Priorität
             $excludePatterns  = @('\.git', '\.venv', 'env', 'venv', 'node_modules', 'migrations', '\.mypy_cache', '\.pytest_cache')
 
             $allFiles = Get-ChildItem -Recurse -File -Depth 8 -ErrorAction SilentlyContinue
 
-            # Saubere Filterung
             $filtered = @()
             foreach ($f in $allFiles) {
               if (-not ($candidateNames -contains $f.Name)) { continue }
@@ -120,7 +109,6 @@ jobs:
               throw "Kein Entrypoint gefunden. Bitte 'project-dir' und 'entrypoint' prüfen."
             }
 
-            # Bei mehreren Treffern nach Priorität wählen
             $ordered = $filtered | Sort-Object -Property @{ Expression = { [array]::IndexOf($candidateNames, $_.Name) } }, FullName
             $entryAbs = $ordered[0].FullName
             Write-Host "Kandidat gewählt (nach Priorität): $entryAbs"
@@ -138,9 +126,9 @@ jobs:
         run: |
           $flags = @()
 
-          if ("${{ github.event.inputs.onefile }}" -eq "true") {
+          if ("${{ github.event.inputs['build-mode'] }}" -eq "onefile") {
             $flags += "--onefile"
-          } elseif ("${{ github.event.inputs.standalone }}" -eq "true") {
+          } else {
             $flags += "--standalone"
           }
 
@@ -199,17 +187,6 @@ jobs:
         with:
           name: nuitka-windows-${{ github.event.inputs['python-version'] }}
           path: dist
-
-      - name: Prüfen, ob Tag vorhanden ist
-        id: tagcheck
-        shell: bash
-        run: |
-          REF="${GITHUB_REF##*/}"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
-            echo "Kein Tag auf der aktuellen Ref. Bitte mit Tag auslösen (z. B. v1.2.3)." >&2
-            exit 1
-          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
