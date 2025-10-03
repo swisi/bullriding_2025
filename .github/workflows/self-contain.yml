@@ -1,9 +1,4 @@
 name: Build Nuitka Windows – Manual
-run-name: >
-  Nuitka Windows • ${{ github.event.inputs['output-name'] || 'app.exe' }}
-  • Python ${{ github.event.inputs['python-version'] }}
-  • ${{ github.ref_name }}
-
 on:
   workflow_dispatch:
     inputs:
