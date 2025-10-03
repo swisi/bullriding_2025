@@ -10,11 +10,11 @@ on:
       project-dir:
         description: Repo-Ordner, in dem dein Code liegt (z. B. . oder backend)
         type: string
-        default: "."
+        default: "/"
       entrypoint:
         description: Pfad zum Python-Entry relativ zu project-dir (z. B. src/app.py). Wird bei Bedarf automatisch gesucht.
         type: string
-        default: "src/app.py"
+        default: "app.py"
       onefile:
         description: Einzelne Datei (--onefile)
         type: boolean
@@ -26,7 +26,7 @@ on:
       output-name:
         description: Dateiname ohne Pfad (z. B. app.exe)
         type: string
-        default: "app.exe"
+        default: "Bullriding.exe"
       use-clang:
         description: clang als Compiler verwenden (empfohlen gegen C1002)
         type: boolean
@@ -38,7 +38,7 @@ on:
       upload-release:
         description: Artefakt zusätzlich an ein GitHub-Release anhängen (benötigt Tag-Ref)
         type: boolean
-        default: false
+        default: true
 
 jobs:
   nuitka-build:
