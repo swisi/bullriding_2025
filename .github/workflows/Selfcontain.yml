@@ -1,16 +1,8 @@
-name: Build (Nuitka) – manual
+name: Build (Nuitka) – manual (Windows/PowerShell)
 
 on:
   workflow_dispatch:
     inputs:
-      os:
-        description: Ziel-Runner
-        type: choice
-        options:
-          - windows-latest
-          - ubuntu-latest
-          - macos-latest
-        default: windows-latest
       python-version:
         description: Python-Version
         type: string
@@ -27,15 +19,19 @@ on:
         description: Standalone inkl. Runtime (--standalone)
         type: boolean
         default: true
+      output-name:
+        description: Dateiname ohne Pfad (z. B. app.exe)
+        type: string
+        default: "app.exe"
       upload-release:
-        description: Auch GitHub-Release erstellen (benötigt Tag auf Ref)
+        description: Artefakt zusätzlich an ein GitHub-Release anhängen (benötigt Tag-Ref)
         type: boolean
         default: false
 
 jobs:
   nuitka-build:
-    name: Nuitka Build
-    runs-on: ${{ inputs.os }}
+    name: Nuitka Build (Windows)
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
@@ -46,14 +42,7 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
-      # Linux braucht patchelf für Standalone-Builds
-      - name: Linux deps (patchelf)
-        if: startsWith(inputs.os, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y patchelf
-
-      # Optional: Caching von pip, wenn requirements.txt vorhanden ist
+      # Optional: Cache für pip (falls requirements.txt existiert)
       - name: Cache pip
         if: hashFiles('requirements.txt') != ''
         uses: actions/cache@v4
@@ -63,44 +52,38 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      - name: Install dependencies (PowerShell)
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if (Test-Path "requirements.txt") { pip install -r requirements.txt }
           pip install nuitka
 
-      - name: Build with Nuitka
-        shell: bash
+      - name: Build with Nuitka (PowerShell)
         run: |
-          # Flags aus Inputs ableiten
-          NUITKA_FLAGS=""
-          if [ "${{ inputs.onefile }}" = "true" ]; then
-            NUITKA_FLAGS="${NUITKA_FLAGS} --onefile"
-          fi
-          if [ "${{ inputs.standalone }}" = "true" ]; then
-            NUITKA_FLAGS="${NUITKA_FLAGS} --standalone"
-          fi
+          $flags = ""
+          if ("${{ inputs.onefile }}" -eq "true") { $flags += " --onefile" }
+          if ("${{ inputs.standalone }}" -eq "true") { $flags += " --standalone" }
 
           # Sinnvolle Defaults
-          NUITKA_FLAGS="${NUITKA_FLAGS} --follow-imports --output-dir=dist"
+          $flags += " --follow-imports --output-dir=dist"
 
-          # Windows-Exe-Endung setzen, sonst plattformspezifisch
-          OUTNAME="app"
-          if [[ "${{ inputs.os }}" == "windows-latest" ]]; then
-            OUTNAME="app.exe"
-          fi
+          $entry = "${{ inputs.entrypoint }}"
+          $outName = "${{ inputs.output-name }}"
+          if ([string]::IsNullOrWhiteSpace($outName)) { $outName = "app.exe" }
 
-          echo "Nuitka Flags: ${NUITKA_FLAGS}"
-          python -m nuitka ${NUITKA_FLAGS} --output-filename=${OUTNAME} "${{ inputs.entrypoint }}"
+          Write-Host "Nuitka Flags:$flags"
+          Write-Host "Entry: $entry"
+          Write-Host "Output: $outName"
 
-          # Build-Ergebnis herausfinden (Onefile legt das File direkt in dist/, Standalone legt Ordner an)
-          echo "Listing dist/"
-          ls -la dist || true
+          python -m nuitka $flags --output-filename="$outName" "$entry"
+
+          Write-Host "dist-Inhalt:"
+          Get-ChildItem -Recurse -Force dist | Format-Table -AutoSize
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nuitka-${{ inputs.os }}-${{ inputs.python-version }}
+          name: nuitka-windows-${{ inputs.python-version }}
           path: |
             dist/**
           if-no-files-found: error
@@ -114,7 +97,7 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: nuitka-${{ inputs.os }}-${{ inputs.python-version }}
+          name: nuitka-windows-${{ inputs.python-version }}
           path: dist
 
       - name: Prüfen, ob Tag vorhanden ist
