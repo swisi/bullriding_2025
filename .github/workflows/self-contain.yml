@@ -10,7 +10,7 @@ on:
       project-dir:
         description: Repo-Ordner, in dem dein Code liegt (z. B. . oder backend)
         type: string
-        default: "/"
+        default: "."
       entrypoint:
         description: Pfad zum Python-Entry relativ zu project-dir (z. B. src/app.py). Wird bei Bedarf automatisch gesucht.
         type: string
@@ -32,7 +32,7 @@ on:
         type: boolean
         default: true
       nuitka-extra-args:
-        description: Zusätzliche Nuitka-Argumente (Leerzeichen-getrennt)
+        description: Zusätzliche Nuitka-Argumente (Leerzeichen-getrennt; du kannst quoten)
         type: string
         default: "--nofollow-import-to=sqlalchemy.dialects.oracle*"
       upload-release:
@@ -90,7 +90,7 @@ jobs:
 
             $allFiles = Get-ChildItem -Recurse -File -Depth 8 -ErrorAction SilentlyContinue
 
-            # Saubere Filterung ohne Semikolon-Tricks
+            # Saubere Filterung
             $filtered = @()
             foreach ($f in $allFiles) {
               if (-not ($candidateNames -contains $f.Name)) { continue }
@@ -140,14 +140,20 @@ jobs:
           $flags += "--follow-imports"
           $flags += "--output-dir=dist"
 
-          # Zusätzliche Args aus Input (leer = keine)
-          $extra = "${{ github.event.inputs['nuitka-extra-args'] }}".Trim()
-          if ($extra) {
-            # Split auf Whitespace, respektiert Quotes
-            $parsed = [System.Management.Automation.Language.Parser]::ParseInput($extra, [ref]$null, [ref]$null).EndBlock.Statements.Extent.Text
-            # Fallback: einfache Split-Variante falls oben leer zurückkommt
-            if (-not $parsed) { $parsed = $extra }
-            $flags += $parsed -split '\s+(?=(?:[^'']*''[^'']*'')*[^'']*$)(?=(?:[^""]*""[^""]*"")*[^""]*$)'
+          # --- Extra-Args robust tokenisieren; lose "--" entfernen ---
+          $extraRaw = "${{ github.event.inputs['nuitka-extra-args'] }}".Trim()
+          if ($extraRaw) {
+            $errors = $null
+            $tokens = [System.Management.Automation.PSParser]::Tokenize($extraRaw, [ref]$errors)
+            $parts  = @()
+            foreach ($t in $tokens) {
+              if ($t.Type -in @('CommandArgument','String','Number')) {
+                $parts += $extraRaw.Substring($t.Start, $t.Length)
+              }
+            }
+            # Raus mit leeren Tokens und alleinstehendem "--"
+            $parts = $parts | Where-Object { $_ -and $_.Trim() -ne '--' }
+            $flags += $parts
           }
 
           $outName = "${{ github.event.inputs['output-name'] }}"
