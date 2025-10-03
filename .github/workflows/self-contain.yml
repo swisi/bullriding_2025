@@ -14,7 +14,7 @@ on:
       entrypoint:
         description: Pfad zum Python-Entry relativ zu project-dir (z. B. src/app.py)
         type: string
-        default: "/app.py"
+        default: "app.py"
       onefile:
         description: Einzelne Datei (--onefile)
         type: boolean
