@@ -1,4 +1,8 @@
 name: Build Nuitka Windows – Manual
+run-name: >
+  Nuitka Windows • ${{ github.event.inputs['output-name'] || 'app.exe' }}
+  • Python ${{ github.event.inputs['python-version'] }}
+  • ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
@@ -121,7 +125,7 @@ jobs:
             }
 
             # Bei mehreren Treffern nach Priorität wählen
-            $ordered = $filtered | Sort-Object { [array]::IndexOf($candidateNames, $_.Name) }, FullName
+            $ordered = $filtered | Sort-Object -Property @{ Expression = { [array]::IndexOf($candidateNames, $_.Name) } }, FullName
             $entryAbs = $ordered[0].FullName
             Write-Host "Kandidat gewählt (nach Priorität): $entryAbs"
           }
@@ -133,10 +137,8 @@ jobs:
         shell: pwsh
         working-directory: ${{ github.workspace }}\${{ github.event.inputs['project-dir'] }}
         env:
-          # Mehr Compiler-Heap für MSVC (wirksam, auch wenn clang deaktiviert ist)
-          CL: "/Zm200"
-          # Verhindert interaktive Nachfragen beim Download von Abhängigkeiten (Dependency Walker)
-          NUITKA_ASSUME_YES_FOR_DOWNLOADS: "1"
+          CL: "/Zm200"                          # mehr Heap für MSVC
+          NUITKA_ASSUME_YES_FOR_DOWNLOADS: "1"  # keine interaktiven Prompts
         run: |
           $flags = @()
 
@@ -150,12 +152,11 @@ jobs:
             $flags += "--clang"
           }
 
-          # Sinnvolle Defaults
           $flags += "--follow-imports"
           $flags += "--output-dir=dist"
-          $flags += "--assume-yes-for-downloads"   # <<< WICHTIG gegen den Prompt
+          $flags += "--assume-yes-for-downloads"
 
-          # --- Extra-Args robust tokenisieren; lose "--" entfernen ---
+          # Extra-Args robust tokenisieren; lose "--" entfernen
           $extraRaw = "${{ github.event.inputs['nuitka-extra-args'] }}".Trim()
           if ($extraRaw) {
             $errors = $null
@@ -188,7 +189,6 @@ jobs:
           name: nuitka-windows-${{ github.event.inputs['python-version'] }}
           path: dist/**
           if-no-files-found: error
-
 
   release:
     name: (Optional) Release anhängen
