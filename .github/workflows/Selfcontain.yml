@@ -1,0 +1,34 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t myapp:latest .
+
+  nuitka:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Nuitka
+        run: pip install nuitka
+      - name: Build EXE
+        run: |
+          python -m nuitka --onefile --standalone --follow-imports \
+            --output-dir=dist src/app.py
+      - name: Upload EXE Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: myapp-exe
+          path: dist/app.exe
