@@ -18,9 +18,7 @@ on:
       build-mode:
         description: Build-Modus (onefile oder standalone)
         type: choice
-        options:
-          - onefile
-          - standalone
+        options: [onefile, standalone]
         default: standalone
       output-name:
         description: Dateiname ohne Pfad (z. B. app.exe)
@@ -42,10 +40,6 @@ on:
         description: Tag-Name fürs Release (z. B. v1.2.3). Leer lassen, wenn du bereits auf einem Git-Tag baust.
         type: string
         default: ""
-      sign-artifacts:
-        description: EXE/DLLs nach dem Build signieren (PFX aus Secrets)
-        type: boolean
-        default: false
 
 jobs:
   nuitka-build:
@@ -87,37 +81,30 @@ jobs:
         run: |
           $entryRel = "${{ github.event.inputs.entrypoint }}"
           $entryAbs = Resolve-Path -LiteralPath $entryRel -ErrorAction SilentlyContinue
-
           if (-not $entryAbs) {
             Write-Host "Entrypoint '$entryRel' nicht gefunden. Starte Auto-Suche…"
-
             $candidateNames   = @('app.py','wsgi.py','main.py','run.py','server.py') # Priorität
-            $excludePatterns  = @('\.git', '\.venv', 'env', 'venv', 'node_modules', 'migrations', '\.mypy_cache', '\.pytest_cache')
-
+            $excludePatterns  = @('\.git','\.venv','env','venv','node_modules','migrations','\.mypy_cache','\.pytest_cache')
             $allFiles = Get-ChildItem -Recurse -File -Depth 8 -ErrorAction SilentlyContinue
 
             $filtered = @()
             foreach ($f in $allFiles) {
               if (-not ($candidateNames -contains $f.Name)) { continue }
-              $full = $f.FullName
-              $isExcluded = $false
-              foreach ($pat in $excludePatterns) {
-                if ($full -match $pat) { $isExcluded = $true; break }
-              }
+              $full = $f.FullName; $isExcluded = $false
+              foreach ($pat in $excludePatterns) { if ($full -match $pat) { $isExcluded = $true; break } }
               if (-not $isExcluded) { $filtered += $f }
             }
 
             if ($filtered.Count -eq 0) {
-              Write-Host ">>> Inhalt (Top 3 Ebenen) zur Diagnose:"
+              Write-Host ">>> Inhalt (Top 3 Ebenen):"
               Get-ChildItem -Recurse -Depth 3 | Select-Object FullName | Format-Table -AutoSize
               throw "Kein Entrypoint gefunden. Bitte 'project-dir' und 'entrypoint' prüfen."
             }
 
             $ordered = $filtered | Sort-Object -Property @{ Expression = { [array]::IndexOf($candidateNames, $_.Name) } }, FullName
             $entryAbs = $ordered[0].FullName
-            Write-Host "Kandidat gewählt (nach Priorität): $entryAbs"
+            Write-Host "Kandidat gewählt: $entryAbs"
           }
-
           "ENTRY_ABS=$entryAbs" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "Verwende Entrypoint: $entryAbs"
 
@@ -132,7 +119,7 @@ jobs:
 
           if ("${{ github.event.inputs['build-mode'] }}" -eq "onefile") {
             $flags += "--onefile"
-            $flags += "--onefile-no-compression"   # weniger AV-Trigger
+            $flags += "--onefile-no-compression"   # reduziert AV-Trigger
           } else {
             $flags += "--standalone"
           }
@@ -141,7 +128,7 @@ jobs:
             $flags += "--clang"
           }
 
-          # (Optional) Windows Metadaten – hilft Reputation
+          # Optionale Windows-Metadaten (hilft Reputation/Transparenz)
           $flags += "--windows-company-name=Bullriding"
           $flags += "--windows-product-name=Bullriding"
           $flags += "--windows-file-description=Bullriding Steuerung"
@@ -156,13 +143,9 @@ jobs:
           $extraRaw = "${{ github.event.inputs['nuitka-extra-args'] }}".Trim()
           if ($extraRaw) {
             $errors = $null
-            $tokens = [System.Management.Automation.PSParser]::Tokenize($extraRaw, [ref]$errors)
+            $tokens = [System.Management.Automation.PSParser]::Tokenize($extraRaw,[ref]$errors)
             $parts  = @()
-            foreach ($t in $tokens) {
-              if ($t.Type -in @('CommandArgument','String','Number')) {
-                $parts += $extraRaw.Substring($t.Start, $t.Length)
-              }
-            }
+            foreach ($t in $tokens) { if ($t.Type -in @('CommandArgument','String','Number')) { $parts += $extraRaw.Substring($t.Start,$t.Length) } }
             $parts = $parts | Where-Object { $_ -and $_.Trim() -ne '--' }
             $flags += $parts
           }
@@ -178,52 +161,6 @@ jobs:
 
           Write-Host "dist-Inhalt:"
           Get-ChildItem -Recurse -Force dist | Format-Table -AutoSize
-
-      - name: Prepare code-signing cert (decode PFX)
-        if: ${{ github.event.inputs.sign-artifacts == 'true' }}
-        shell: pwsh
-        run: |
-          if (-not "${{ secrets.CS_PFX_B64 }}") { throw "Secret CS_PFX_B64 fehlt." }
-          if (-not "${{ secrets.CS_PFX_PASSWORD }}") { throw "Secret CS_PFX_PASSWORD fehlt." }
-          $pfxBytes = [Convert]::FromBase64String("${{ secrets.CS_PFX_B64 }}")
-          $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-          "PFX_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Code-sign EXE/DLLs (Authenticode)
-        if: ${{ github.event.inputs.sign-artifacts == 'true' }}
-        shell: pwsh
-        run: |
-          # signtool lokalisieren
-          $signtool = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\x64\signtool.exe"
-          if (-not (Test-Path $signtool)) {
-            $signtool = "${env:ProgramFiles(x86)}\Microsoft SDKs\ClickOnce\SignTool\signtool.exe"
-          }
-          if (-not (Test-Path $signtool)) {
-            # Versuch via vswhere
-            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-            if (Test-Path $vswhere) {
-              $vsPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-              if ($vsPath) {
-                $cand = Get-ChildItem "$vsPath" -Recurse -File -Filter signtool.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-                if ($cand) { $signtool = $cand.FullName }
-              }
-            }
-          }
-          if (-not (Test-Path $signtool)) { throw "signtool.exe nicht gefunden." }
-
-          $files = Get-ChildItem -Recurse -File dist -Include *.exe,*.dll
-          if ($files.Count -eq 0) { throw "Keine EXE/DLLs zum Signieren gefunden." }
-
-          foreach ($f in $files) {
-            & $signtool sign `
-              /fd SHA256 `
-              /tr http://timestamp.digicert.com `
-              /td SHA256 `
-              /f "$env:PFX_PATH" `
-              /p "${{ secrets.CS_PFX_PASSWORD }}" `
-              "$($f.FullName)"
-          }
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
