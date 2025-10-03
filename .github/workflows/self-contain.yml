@@ -83,14 +83,23 @@ jobs:
 
           if (-not $entryAbs) {
             Write-Host "Entrypoint '$entryRel' nicht gefunden. Starte Auto-Suche…"
-            $candidateNames = @('app.py','wsgi.py','main.py','run.py','server.py')  # Priorität
-            $excludePatterns = @('\.git', '\.venv', 'env', 'venv', 'node_modules', 'migrations', '\.mypy_cache', '\.pytest_cache')
 
-            $allFiles = Get-ChildItem -Recurse -File -Depth 8 2>$null
-            $filtered = $allFiles | Where-Object {
-              ($candidateNames -contains $_.Name) -and (
-                ($p = $_.FullName; -not ($excludePatterns | ForEach-Object { $p -match $_ } | Where-Object { $_ }))
-              )
+            # Priorität: erster Eintrag gewinnt
+            $candidateNames   = @('app.py','wsgi.py','main.py','run.py','server.py')
+            $excludePatterns  = @('\.git', '\.venv', 'env', 'venv', 'node_modules', 'migrations', '\.mypy_cache', '\.pytest_cache')
+
+            $allFiles = Get-ChildItem -Recurse -File -Depth 8 -ErrorAction SilentlyContinue
+
+            # Saubere Filterung ohne Semikolon-Tricks
+            $filtered = @()
+            foreach ($f in $allFiles) {
+              if (-not ($candidateNames -contains $f.Name)) { continue }
+              $full = $f.FullName
+              $isExcluded = $false
+              foreach ($pat in $excludePatterns) {
+                if ($full -match $pat) { $isExcluded = $true; break }
+              }
+              if (-not $isExcluded) { $filtered += $f }
             }
 
             if ($filtered.Count -eq 0) {
@@ -99,9 +108,10 @@ jobs:
               throw "Kein Entrypoint gefunden. Bitte 'project-dir' und 'entrypoint' prüfen."
             }
 
-            $ordered = $filtered | Sort-Object -Property @{Expression={ [array]::IndexOf($candidateNames, $_.Name) }}
+            # Bei mehreren Treffern nach Priorität wählen
+            $ordered = $filtered | Sort-Object { [array]::IndexOf($candidateNames, $_.Name) }, FullName
             $entryAbs = $ordered[0].FullName
-            Write-Host "Mehrere Kandidaten gefunden. Wähle nach Priorität: $entryAbs"
+            Write-Host "Kandidat gewählt (nach Priorität): $entryAbs"
           }
 
           "ENTRY_ABS=$entryAbs" | Out-File -FilePath $env:GITHUB_ENV -Append
