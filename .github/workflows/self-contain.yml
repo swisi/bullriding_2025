@@ -32,7 +32,7 @@ on:
         type: boolean
         default: true
       nuitka-extra-args:
-        description: Zusätzliche Nuitka-Argumente (Leerzeichen-getrennt; du kannst quoten)
+        description: Zusätzliche Nuitka-Argumente (Leerzeichen-getrennt)
         type: string
         default: "--nofollow-import-to=sqlalchemy.dialects.oracle*"
       upload-release:
@@ -123,6 +123,8 @@ jobs:
         env:
           # Mehr Compiler-Heap für MSVC (wirksam, auch wenn clang deaktiviert ist)
           CL: "/Zm200"
+          # Verhindert interaktive Nachfragen beim Download von Abhängigkeiten (Dependency Walker)
+          NUITKA_ASSUME_YES_FOR_DOWNLOADS: "1"
         run: |
           $flags = @()
 
@@ -139,6 +141,7 @@ jobs:
           # Sinnvolle Defaults
           $flags += "--follow-imports"
           $flags += "--output-dir=dist"
+          $flags += "--assume-yes-for-downloads"   # <<< WICHTIG gegen den Prompt
 
           # --- Extra-Args robust tokenisieren; lose "--" entfernen ---
           $extraRaw = "${{ github.event.inputs['nuitka-extra-args'] }}".Trim()
@@ -151,7 +154,6 @@ jobs:
                 $parts += $extraRaw.Substring($t.Start, $t.Length)
               }
             }
-            # Raus mit leeren Tokens und alleinstehendem "--"
             $parts = $parts | Where-Object { $_ -and $_.Trim() -ne '--' }
             $flags += $parts
           }
