@@ -39,7 +39,7 @@ on:
         description: Artefakt zusätzlich an ein GitHub-Release anhängen (benötigt Tag-Ref)
         type: boolean
         default: true
-              release-tag:
+      release-tag:
         description: Tag-Name fürs Release (z. B. v1.2.3). Erlaubt Releases ohne Git-Tag.
         type: string
         default: ""
