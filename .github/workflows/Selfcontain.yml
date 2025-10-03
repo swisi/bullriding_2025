@@ -1,34 +1,136 @@
-name: Build and Release
+name: Build (Nuitka) – manual
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      os:
+        description: Ziel-Runner
+        type: choice
+        options:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
+        default: windows-latest
+      python-version:
+        description: Python-Version
+        type: string
+        default: "3.12"
+      entrypoint:
+        description: Pfad zu deinem Python-Entry (z. B. src/app.py)
+        type: string
+        default: "src/app.py"
+      onefile:
+        description: Einzelne Datei (--onefile)
+        type: boolean
+        default: true
+      standalone:
+        description: Standalone inkl. Runtime (--standalone)
+        type: boolean
+        default: true
+      upload-release:
+        description: Auch GitHub-Release erstellen (benötigt Tag auf Ref)
+        type: boolean
+        default: false
 
 jobs:
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t myapp:latest .
+  nuitka-build:
+    name: Nuitka Build
+    runs-on: ${{ inputs.os }}
 
-  nuitka:
-    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Python
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Install Nuitka
-        run: pip install nuitka
-      - name: Build EXE
+          python-version: ${{ inputs.python-version }}
+
+      # Linux braucht patchelf für Standalone-Builds
+      - name: Linux deps (patchelf)
+        if: startsWith(inputs.os, 'ubuntu')
         run: |
-          python -m nuitka --onefile --standalone --follow-imports \
-            --output-dir=dist src/app.py
-      - name: Upload EXE Artifact
+          sudo apt-get update
+          sudo apt-get install -y patchelf
+
+      # Optional: Caching von pip, wenn requirements.txt vorhanden ist
+      - name: Cache pip
+        if: hashFiles('requirements.txt') != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ inputs.python-version }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install nuitka
+
+      - name: Build with Nuitka
+        shell: bash
+        run: |
+          # Flags aus Inputs ableiten
+          NUITKA_FLAGS=""
+          if [ "${{ inputs.onefile }}" = "true" ]; then
+            NUITKA_FLAGS="${NUITKA_FLAGS} --onefile"
+          fi
+          if [ "${{ inputs.standalone }}" = "true" ]; then
+            NUITKA_FLAGS="${NUITKA_FLAGS} --standalone"
+          fi
+
+          # Sinnvolle Defaults
+          NUITKA_FLAGS="${NUITKA_FLAGS} --follow-imports --output-dir=dist"
+
+          # Windows-Exe-Endung setzen, sonst plattformspezifisch
+          OUTNAME="app"
+          if [[ "${{ inputs.os }}" == "windows-latest" ]]; then
+            OUTNAME="app.exe"
+          fi
+
+          echo "Nuitka Flags: ${NUITKA_FLAGS}"
+          python -m nuitka ${NUITKA_FLAGS} --output-filename=${OUTNAME} "${{ inputs.entrypoint }}"
+
+          # Build-Ergebnis herausfinden (Onefile legt das File direkt in dist/, Standalone legt Ordner an)
+          echo "Listing dist/"
+          ls -la dist || true
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: myapp-exe
-          path: dist/app.exe
+          name: nuitka-${{ inputs.os }}-${{ inputs.python-version }}
+          path: |
+            dist/**
+          if-no-files-found: error
+
+  release:
+    name: (Optional) Release anhängen
+    needs: nuitka-build
+    if: ${{ inputs.upload-release == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nuitka-${{ inputs.os }}-${{ inputs.python-version }}
+          path: dist
+
+      - name: Prüfen, ob Tag vorhanden ist
+        id: tagcheck
+        run: |
+          REF="${GITHUB_REF##*/}"
+          echo "ref=$REF" >> $GITHUB_OUTPUT
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            echo "Kein Tag auf der aktuellen Ref. Bitte mit Tag auslösen (z. B. v1.2.3)." >&2
+            exit 1
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
